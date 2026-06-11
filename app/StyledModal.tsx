@@ -128,3 +128,5 @@ const s = StyleSheet.create({
   btnTextDestructive:{ color: "#fff" },
   btnTextCancel:    { color: "#555" },
 });
+
+export default StyledModal;

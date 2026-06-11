@@ -112,7 +112,9 @@ export async function fetchDirections(
     const leg   = route.legs[0];   // single origin→destination leg
 
     // ── Decode the overview polyline (full road-hugging path) ─────────────────
-    const polylinePoints = decodePolyline(route.overview_polyline.encoded_polyline ?? route.overview_polyline.points);
+    const encodedPolyline = route.overview_polyline?.points ?? route.overview_polyline?.encoded_polyline ?? "";
+    if (!encodedPolyline) return null;
+    const polylinePoints = decodePolyline(encodedPolyline);
 
     // ── Parse each turn-by-turn step ──────────────────────────────────────────
     const steps: DirectionStep[] = leg.steps.map((s: any) => ({

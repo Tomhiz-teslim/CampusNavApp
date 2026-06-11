@@ -1,12 +1,12 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { View, StyleSheet, Animated, Dimensions } from "react-native";
 import { router } from "expo-router";
 
 const { width } = Dimensions.get("window");
 
 export default function SplashScreen() {
-  const opacity = new Animated.Value(0);
-  const scale = new Animated.Value(0.8);
+  const opacity = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(0.8)).current;
 
   useEffect(() => {
     Animated.parallel([

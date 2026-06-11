@@ -46,7 +46,7 @@ export default function SubmitLocationScreen() {
     if (!user) return;
     setUserId(user.uid);
 
-    onValue(ref(database, `users/${user.uid}`), (snap) => {
+    const unsubUser = onValue(ref(database, `users/${user.uid}`), (snap) => {
       const d = snap.val();
       if (d) setUserName(d.fullName || d.name || "");
     });
@@ -68,30 +68,36 @@ export default function SubmitLocationScreen() {
       setMySubmissions(merged);
     }
 
-   onValue(ref(database, "pendingLocations"), (snap) => {
-  const data = snap.val() || {};
-  pendingMine = Object.entries(data)
-    .filter(([, v]: any) => v.submittedBy === user.uid)
-    .map(([id, v]: any) => ({
-      id,
-      ...v,
-      status: v.status || "pending",  // keep whatever status is stored
-    }));
-  mergeAndSet();
-});
+   const unsubPending = onValue(ref(database, "pendingLocations"), (snap) => {
+      const data = snap.val() || {};
+      pendingMine = Object.entries(data)
+        .filter(([, v]: any) => v.submittedBy === user.uid)
+        .map(([id, v]: any) => ({
+          id,
+          ...v,
+          status: v.status || "pending",
+        }));
+      mergeAndSet();
+    });
 
-onValue(ref(database, "approvedLocations"), (snap) => {
-  const data = snap.val() || {};
-  approvedMine = Object.entries(data)
-    .filter(([, v]: any) => v.submittedBy === user.uid)
-    .map(([id, v]: any) => ({
-      id,
-      originalId: id,
-      ...v,
-      status: "approved",  // force approved status
-    }));
-  mergeAndSet();
-});
+    const unsubApproved = onValue(ref(database, "approvedLocations"), (snap) => {
+      const data = snap.val() || {};
+      approvedMine = Object.entries(data)
+        .filter(([, v]: any) => v.submittedBy === user.uid)
+        .map(([id, v]: any) => ({
+          id,
+          originalId: id,
+          ...v,
+          status: "approved",
+        }));
+      mergeAndSet();
+    });
+
+    return () => {
+      unsubUser();
+      unsubPending();
+      unsubApproved();
+    };
   }, []);
 
   async function handleGetGPS() {

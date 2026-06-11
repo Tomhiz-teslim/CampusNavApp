@@ -224,7 +224,7 @@ export default function ARNavigation({
           <Animated.View
             style={[
               s.arrowBubble,
-              { transform: [{ scale: Animated.multiply(pulse, arrowScale) }] },
+              { transform: [{ scale: pulse }, { scale: arrowScale }] },
             ]}
           >
             <Text style={s.arrowSymbol}>{arrowSymbol}</Text>

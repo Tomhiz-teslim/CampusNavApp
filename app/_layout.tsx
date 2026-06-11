@@ -1,10 +1,13 @@
 import { useEffect } from "react";
-import { Stack, router } from "expo-router";
+import { Stack, router, useRootNavigationState } from "expo-router";
 import { auth } from "../lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 
 export default function RootLayout() {
+  const rootState = useRootNavigationState();
+
   useEffect(() => {
+    if (!rootState?.key) return;
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         router.replace("/home");
@@ -13,20 +16,18 @@ export default function RootLayout() {
       }
     });
     return () => unsubscribe();
-  }, []);
-
+  }, [rootState?.key]);
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" options={{ headerShown: false }} />
-      <Stack.Screen name="login" options={{ headerShown: false }} />
-      <Stack.Screen name="register" options={{ headerShown: false }} />
-      <Stack.Screen name="home" options={{ headerShown: false }} />
-      <Stack.Screen name="admin" options={{ headerShown: false }} />
-      <Stack.Screen name="account" options={{ headerShown: false }} />
-      <Stack.Screen name="events" options={{ headerShown: false }} />
-      <Stack.Screen name="cafeteria" options={{ headerShown: false }} />
-      <Stack.Screen name="splash" options={{ headerShown: false }} />
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="login" />
+      <Stack.Screen name="register" />
+      <Stack.Screen name="home" />
+      <Stack.Screen name="admin" />
+      <Stack.Screen name="account" />
+      <Stack.Screen name="events" />
+      <Stack.Screen name="cafeteria" />
+      <Stack.Screen name="splash" />
+      <Stack.Screen name="(tabs)" />
     </Stack>
   );
 }
