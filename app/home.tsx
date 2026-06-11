@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -8,7 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-    StyleSheet,
+  StyleSheet,
   Switch,
   Text,
   TextInput,
@@ -16,7 +16,6 @@ import {
   View,
 } from "react-native";
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
-import { speakNeural } from "../lib/tts";
 import * as Location from "expo-location";
 import { router, useLocalSearchParams } from "expo-router";
 import * as Speech from "expo-speech";
@@ -29,7 +28,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Share } from "react-native";
 import * as Haptics from "expo-haptics";
 import ARNavigation from "../components/ARNavigation";
-
+import CompassPointer from "../components/CompassPointer";
+import ServicesTab from "../components/services"; // adjust path
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 // ── Building categories & colors ──────────────────────────────────────────────
@@ -704,8 +704,10 @@ function hasPassedWaypoint(
 ): boolean {
   const INNER_RADIUS_M = currentSpeed < 1.5 ? 5.0 : 12.0;
   const distToWaypoint = haversineMetres(
-    pos.latitude,     pos.longitude,
-    waypointLat,     waypointLng,
+    pos.latitude,
+    pos.longitude,
+    waypointLat,
+    waypointLng,
   );
   if (distToWaypoint < INNER_RADIUS_M) return true;
 
@@ -738,10 +740,10 @@ function snapToRoute(
   polyline: { latitude: number; longitude: number }[],
   currentHeading: number,
   currentSpeed: number = 0,
-): { latitude: number; longitude: number } {
-  if (!polyline.length) return pos;
+): { latitude: number; longitude: number } | null {
+  if (!polyline.length) return null;
 
-  const SNAP_RADIUS_M = currentSpeed < 1.5 ? 35 : 60;
+   const SNAP_RADIUS_M = currentSpeed < 1.5 ? 12 : 20; 
   const headingPenaltyFactor = Math.min(currentSpeed / 5.0, 1.0);
   const BBOX = (SNAP_RADIUS_M / 111000) * 2.5;
 
@@ -754,8 +756,10 @@ function snapToRoute(
     const minLng = Math.min(a.longitude, b.longitude) - BBOX;
     const maxLng = Math.max(a.longitude, b.longitude) + BBOX;
     if (
-      pos.latitude >= minLat &&       pos.latitude <= maxLat &&
-      pos.longitude >= minLng &&       pos.longitude <= maxLng
+      pos.latitude >= minLat &&
+      pos.latitude <= maxLat &&
+      pos.longitude >= minLng &&
+      pos.longitude <= maxLng
     ) {
       nearbyIndices.push(i);
     }
@@ -789,13 +793,15 @@ function snapToRoute(
     };
 
     const dist = haversineMetres(
-      pos.latitude,       pos.longitude,
-      snapped.latitude,       snapped.longitude,
+      pos.latitude,
+      pos.longitude,
+      snapped.latitude,
+      snapped.longitude,
     );
 
     if (dist > SNAP_RADIUS_M) continue;
 
-    const segHeading = ((Math.atan2(dx, dy) * (180 / Math.PI)) + 360) % 360;
+    const segHeading = (Math.atan2(dx, dy) * (180 / Math.PI) + 360) % 360;
     const rawDiff = Math.abs(((currentHeading - segHeading + 540) % 360) - 180);
 
     const isReversed = rawDiff > 150;
@@ -810,6 +816,7 @@ function snapToRoute(
     }
   }
 
+ if (bestSnap === pos) return null;
   return bestSnap;
 }
 
@@ -826,14 +833,17 @@ function kalmanFilter(
   speed: number,
   state: KalmanState | null,
 ): KalmanState {
-
+  // CHANGE 2: Raised minimum Q from 0.5 → 3.0.
+  // Old value (0.5) treated any movement under 0.3 m/s as pure noise,
+  // so the filter would suppress legitimate slow walking. 3.0 lets the
+  // filter track real movement even when the GPS reports near-zero speed.
   let Q: number;
   if (speed < 0.3) {
-    Q = 0.5;
+    Q = 3.0;                                      // was 0.5
   } else if (speed < 2.0) {
-    Q = 0.5 + ((speed - 0.3) / 1.7) * 3.5;
+    Q = 3.0 + ((speed - 0.3) / 1.7) * 5.0;      // was 0.5 + … * 3.5
   } else {
-    Q = Math.min(4.0 + (speed - 2.0) * 3.0, 20.0);
+    Q = Math.min(8.0 + (speed - 2.0) * 3.0, 25.0); // was 4.0 + … , cap 20
   }
 
   const clampedAccuracy = Math.max(accuracy, 2.0);
@@ -847,21 +857,32 @@ function kalmanFilter(
   const gain = predictedVariance / (predictedVariance + R);
 
   const rawDist = haversineMetres(state.lat, state.lng, newLat, newLng);
-  const plausibleMaxJump = Math.max(speed * 3.0, 15.0);
-  if (rawDist > plausibleMaxJump && state.variance < 50) {
+
+  // CHANGE 1: Old threshold was max(speed*3, 40m) which froze the marker
+  // on any GPS jump > 40 m — a very common occurrence on real devices while
+  // walking. New threshold is 150 m (truly implausible for a pedestrian).
+  // For jumps between 40-150 m we now do a soft blend (75% new position)
+  // rather than hard-freezing, so the marker always moves toward truth.
+  const HARD_FREEZE_M = 150.0;                    // was max(speed*3, 40)
+  if (rawDist > HARD_FREEZE_M && state.variance < 200) {
+    // Truly implausible jump — freeze and widen variance to recover quickly
     return {
       lat: state.lat,
       lng: state.lng,
-      variance: Math.min(predictedVariance * 1.5, 200),
+      variance: Math.min(predictedVariance * 1.5, 400),
     };
   }
 
+  // Soft blend for medium-sized GPS jumps (common on real devices)
+  const softBlendGain = rawDist > 40 ? Math.max(gain, 0.75) : gain;
+
   return {
-    lat: state.lat + gain * (newLat - state.lat),
-    lng: state.lng + gain * (newLng - state.lng),
-    variance: (1 - gain) * predictedVariance,
+    lat: state.lat + softBlendGain * (newLat - state.lat),
+    lng: state.lng + softBlendGain * (newLng - state.lng),
+    variance: (1 - softBlendGain) * predictedVariance,
   };
 }
+
 // ── Haversine ─────────────────────────────────────────────────────────────────
 function haversineMetres(
   lat1: number,
@@ -914,8 +935,6 @@ function pointToSegmentDist(
     a.longitude + t * dx,
   );
 }
-
-// ── Strip HTML from instruction strings ───────────────────────────────────────
 function stripHtml(html: string): string {
   return html
     .replace(/<[^>]*>/g, "")
@@ -927,12 +946,25 @@ function stripHtml(html: string): string {
     .trim();
 }
 
-// ── Voice guidance ────────────────────────────────────────────────────────────
-// ── Voice guidance ────────────────────────────────────────────────────────────
-// ── Voice guidance ────────────────────────────────────────────────────────────
-// ── Voice guidance ────────────────────────────────────────────────────────────
-
-// ── Maneuver arrow maps to a Google Maps-like arrow label ─────────────────────
+// ── Strip HTML from instruction strings ───────────────────────────────────────
+function humanizeInstruction(instruction: string): string {
+  return stripHtml(instruction)
+    .replace(/\bN\b/g, "north")
+    .replace(/\bS\b/g, "south")
+    .replace(/\bE\b/g, "east")
+    .replace(/\bW\b/g, "west")
+    .replace(/\bNE\b/gi, "right")
+    .replace(/\bNW\b/gi, "left")
+    .replace(/\bSE\b/gi, "right")
+    .replace(/\bSW\b/gi, "left")
+    .replace(/\bnorth\b/gi, "straight")
+    .replace(/\bsouth\b/gi, "straight")
+    .replace(/\beast\b/gi, "right")
+    .replace(/\bwest\b/gi, "left")
+    .replace(/\bonto\b/gi, "onto")
+    .trim();
+}
+// ── Maneuver arrow ────────────────────────────────────────────────────────────
 function getDirectionLabel(maneuver: string): string {
   if (!maneuver) return "↑";
   if (maneuver.includes("turn-right")) return "→";
@@ -941,11 +973,11 @@ function getDirectionLabel(maneuver: string): string {
   if (maneuver.includes("sharp-left")) return "↰";
   if (maneuver.includes("uturn")) return "↩";
   if (maneuver.includes("roundabout")) return "↻";
-  if (maneuver.includes("merge")) return "⇗";
-  if (maneuver.includes("ramp-right")) return "↗";
-  if (maneuver.includes("ramp-left")) return "↖";
-  if (maneuver.includes("fork-right")) return "↗";
-  if (maneuver.includes("fork-left")) return "↖";
+  if (maneuver.includes("merge")) return "↑";
+  if (maneuver.includes("ramp-right")) return "→";
+  if (maneuver.includes("ramp-left")) return "←";
+  if (maneuver.includes("fork-right")) return "→";
+  if (maneuver.includes("fork-left")) return "←";
   return "↑";
 }
 
@@ -967,7 +999,6 @@ function SelectedLocationCard({
   const colors = CATEGORY_COLORS[selected.category] || CATEGORY_COLORS.admin;
 
   useEffect(() => {
-    // Entrance animation
     Animated.parallel([
       Animated.spring(slideAnim, {
         toValue: 0,
@@ -982,7 +1013,6 @@ function SelectedLocationCard({
       }),
     ]).start();
 
-    // Pulse the directions button
     const pulse = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
@@ -1001,7 +1031,6 @@ function SelectedLocationCard({
     return () => pulse.stop();
   }, []);
 
-  // Extract hours hint from description (e.g. "Mon–Fri 7am–6pm")
   const hoursMatch = selected.description?.match(
     /([A-Z][a-z]{0,2}[–—-][A-Z][a-z]{0,2}\s+\d[^,)]*|\d{1,2}[ap]m[–—-]\d{1,2}[ap]m|24 hours)/i,
   );
@@ -1012,9 +1041,8 @@ function SelectedLocationCard({
     if (hoursStr.toLowerCase().includes("24")) return true;
     const now = new Date();
     const hour = now.getHours();
-    const day = now.getDay(); // 0 = Sun, 6 = Sat
+    const day = now.getDay();
     const isWeekday = day >= 1 && day <= 5;
-    const isSaturday = day === 6;
     if (hoursStr.toLowerCase().includes("mon–fri") && !isWeekday) return false;
     if (hoursStr.toLowerCase().includes("mon–sat") && day === 0) return false;
     const timeMatch = hoursStr.match(/(\d{1,2})([ap]m)[–-](\d{1,2})([ap]m)/i);
@@ -1032,7 +1060,6 @@ function SelectedLocationCard({
 
   const openStatus = isOpenNow(hoursText);
 
-  // Distance
   const distM = userLocation
     ? haversineMetres(
         userLocation.latitude,
@@ -1055,11 +1082,8 @@ function SelectedLocationCard({
         { transform: [{ translateY: slideAnim }], opacity: fadeAnim },
       ]}
     >
-      {/* Accent bar */}
       <View style={[scStyles.accentBar, { backgroundColor: colors.pin }]} />
-
       <View style={scStyles.inner}>
-        {/* Icon bubble */}
         <View
           style={[
             scStyles.iconBubble,
@@ -1068,15 +1092,11 @@ function SelectedLocationCard({
         >
           <Text style={scStyles.iconText}>{selected.icon}</Text>
         </View>
-
-        {/* Info */}
         <View style={scStyles.info}>
           <Text style={scStyles.name} numberOfLines={1}>
             {selected.name}
           </Text>
-
           <View style={scStyles.metaRow}>
-            {/* Category pill */}
             <View style={[scStyles.catPill, { backgroundColor: colors.pin }]}>
               <Text style={scStyles.catPillText}>
                 {selected.category === "other"
@@ -1084,35 +1104,35 @@ function SelectedLocationCard({
                   : selected.category}
               </Text>
             </View>
-
-            {/* Distance chip */}
             {distLabel && (
               <View style={scStyles.distChip}>
                 <Text style={scStyles.distText}>📍 {distLabel}</Text>
               </View>
             )}
-
-            {/* Hours chip */}
             {hoursText && (
               <View style={scStyles.hoursChip}>
                 <Text style={scStyles.hoursText}>🕐 {hoursText}</Text>
               </View>
             )}
             {openStatus !== null && (
-              <View                 style={[                  scStyles.hoursChip,                   {
-                    backgroundColor: openStatus ? "#e8f5e9" : "#ffebee"
-                }]}              >
-                <Text                   style={[                    scStyles.hoursText,                     {
-                      color: openStatus ? "#2e7d32" : "#c62828"
-                  }]}                >
+              <View
+                style={[
+                  scStyles.hoursChip,
+                  { backgroundColor: openStatus ? "#e8f5e9" : "#ffebee" },
+                ]}
+              >
+                <Text
+                  style={[
+                    scStyles.hoursText,
+                    { color: openStatus ? "#2e7d32" : "#c62828" },
+                  ]}
+                >
                   {openStatus ? "● Open" : "● Closed"}
                 </Text>
               </View>
             )}
           </View>
         </View>
-
-        {/* Close */}
         <TouchableOpacity
           style={scStyles.closeBtn}
           onPress={onClose}
@@ -1121,15 +1141,12 @@ function SelectedLocationCard({
           <Text style={scStyles.closeBtnText}>✕</Text>
         </TouchableOpacity>
       </View>
-
-      {/* Directions button */}
       <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
         <TouchableOpacity
           style={[scStyles.dirBtn, { backgroundColor: "#1a5c38" }]}
           onPress={onGetDirections}
           activeOpacity={0.85}
         >
-          {/* Glow layer */}
           <View
             style={[scStyles.dirBtnGlow, { backgroundColor: "#1a5c3840" }]}
           />
@@ -1159,11 +1176,7 @@ const scStyles = StyleSheet.create({
     elevation: 14,
     overflow: "hidden",
   },
-  accentBar: {
-    height: 4,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-  },
+  accentBar: { height: 4, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
   inner: {
     flexDirection: "row",
     alignItems: "center",
@@ -1225,8 +1238,6 @@ const scStyles = StyleSheet.create({
     marginLeft: 6,
   },
   closeBtnText: { fontSize: 12, color: "#888", fontWeight: "700" },
-
-  // Directions button
   dirBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -1417,7 +1428,7 @@ const CATEGORY_ICONS: Record<string, string> = {
 };
 
 const REROUTE_THRESHOLD_M = 25;
-const ARRIVAL_THRESHOLD_M = 30;
+const ARRIVAL_THRESHOLD_M = 18;
 const STEP_ADVANCE_WALKING_M = 20;
 const STEP_ADVANCE_DRIVING_M = 60;
 
@@ -1509,7 +1520,14 @@ export default function HomeScreen() {
     latitude: number;
     longitude: number;
   } | null>(null);
-  const [travelMode, setTravelMode] = useState<"walking" | "driving">(    "walking"  );
+  const [displayUserLocation, setDisplayUserLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+  const interpolationFrameRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [travelMode, setTravelMode] = useState<"walking" | "driving">(
+    "walking",
+  );
   const [rerouting, setRerouting] = useState(false);
   const [followUser, setFollowUser] = useState(true);
   const [muted, setMuted] = useState(false);
@@ -1517,6 +1535,11 @@ export default function HomeScreen() {
   const [eventsLoaded, setEventsLoaded] = useState(false);
   const [communityLoaded, setCommunityLoaded] = useState(false);
   const [arMode, setArMode] = useState(false);
+
+  // ── NEW: distance to destination for CompassPointer ──
+  const [distanceToDestination, setDistanceToDestination] =
+    useState<number>(9999);
+
   // ETA live update
   const [liveEta, setLiveEta] = useState<string>("");
   const [heading, setHeading] = useState(0);
@@ -1524,15 +1547,12 @@ export default function HomeScreen() {
   const speedHistoryRef = useRef<number[]>([]);
   const kalmanRef = useRef<KalmanState | null>(null);
 
-  // Slide-up panel animation
   const panelAnim = useRef(new Animated.Value(0)).current;
 
-  // Events & community
   const [events, setEvents] = useState<any[]>([]);
   const [communityLocations, setCommunityLocations] = useState<any[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
 
-  // Friends
   const [friends, setFriends] = useState<any[]>([]);
   const [friendRequests, setFriendRequests] = useState<any[]>([]);
   const [friendUsername, setFriendUsername] = useState("");
@@ -1561,6 +1581,7 @@ export default function HomeScreen() {
     eventDesc?: string;
   }>();
 
+  const sharingLocationRef = useRef(true);
   const mapRef = useRef<any>(null);
   const stepsScrollRef = useRef<ScrollView>(null);
   const locationWatchRef = useRef<any>(null);
@@ -1578,6 +1599,7 @@ export default function HomeScreen() {
   const handleLiveNavigationRef = useRef<any>(() => {});
   const arrivalCountRef = useRef(0);
   const lastCameraUpdateRef = useRef(0);
+  const lastLocationTimestampRef = useRef<number>(0);
   const speakTimeoutRef = useRef<any>(null);
   const headingWatchRef = useRef<any>(null);
   const pendingDestinationRef = useRef<any>(null);
@@ -1619,19 +1641,51 @@ export default function HomeScreen() {
     mutedRef.current = muted;
   }, [muted]);
 
-  // Smoothed heading — must be computed BEFORE the camera useEffect below
-  const smoothedHeading = headingHistoryRef.current.length
-    ? headingHistoryRef.current.reduce((a, b) => a + b, 0) /
-      headingHistoryRef.current.length
-    : heading;
+  // CHANGE 9: Smooth marker interpolation loop — runs at ~30 fps.
+  // Each tick lerps displayUserLocation 25% of the way toward the real
+  // GPS userLocation. This gives a smooth "glide" instead of teleport jumps.
+  useEffect(() => {
+    if (interpolationFrameRef.current) clearInterval(interpolationFrameRef.current);
 
-  // FIX 1 — Map viewport rotates with heading during navigation
+    interpolationFrameRef.current = setInterval(() => {
+      const target = userLocationRef.current;
+      if (!target) return;
 
+      setDisplayUserLocation((prev) => {
+        if (!prev) return target;
+        const LERP = navigatingRef.current ? 0.25 : 0.4; // faster when navigating
+        const newLat = prev.latitude + LERP * (target.latitude - prev.latitude);
+        const newLng = prev.longitude + LERP * (target.longitude - prev.longitude);
+        // Stop updating when within 0.00001 deg (~1m) to avoid infinite micro-updates
+        const delta = Math.abs(newLat - target.latitude) + Math.abs(newLng - target.longitude);
+        if (delta < 0.000005) return target;
+        return { latitude: newLat, longitude: newLng };
+      });
+    }, 33); // ~30 fps
+
+    return () => {
+      if (interpolationFrameRef.current) clearInterval(interpolationFrameRef.current);
+    };
+  }, []); // runs once; reads navigatingRef live via ref
+
+  const smoothedHeading = useMemo(() => {
+    const sinSum = headingHistoryRef.current.reduce(
+      (acc, h) => acc + Math.sin((h * Math.PI) / 180),
+      0,
+    );
+    const cosSum = headingHistoryRef.current.reduce(
+      (acc, h) => acc + Math.cos((h * Math.PI) / 180),
+      0,
+    );
+    return headingHistoryRef.current.length
+      ? ((Math.atan2(sinSum, cosSum) * 180) / Math.PI + 360) % 360
+      : heading;
+  }, [heading]);
 
   useEffect(() => {
     if (!navigating || !followUser || !userLocation) return;
     const now = Date.now();
-    if (now - lastCameraUpdateRef.current < 800) return;
+    if (now - lastCameraUpdateRef.current < 300) return;   // was 800ms
     lastCameraUpdateRef.current = now;
 
     const avgSpeed =
@@ -1642,7 +1696,11 @@ export default function HomeScreen() {
 
     const zoom =
       travelMode === "driving"
-        ? avgSpeed > 13           ? 15           : avgSpeed > 6             ? 16             : 17
+        ? avgSpeed > 13
+          ? 15
+          : avgSpeed > 6
+            ? 16
+            : 17
         : 19;
 
     mapRef.current?.animateCamera(
@@ -1659,7 +1717,6 @@ export default function HomeScreen() {
     );
   }, [smoothedHeading, navigating, followUser, userLocation, travelMode]);
 
-  // Params useEffect - receives shuttle destination
   useEffect(() => {
     if (params.eventLat && params.eventLng && params.eventName) {
       const dest = {
@@ -1676,7 +1733,6 @@ export default function HomeScreen() {
       setNavigating(false);
       setActiveTab("home");
 
-      // If location is already available, get directions immediately
       const loc = userLocationRef.current;
       if (loc) {
         setLoadingDirs(true);
@@ -1708,7 +1764,6 @@ export default function HomeScreen() {
           }, 400);
         });
       } else {
-        // GPS not ready yet — store for setup() to pick up
         pendingDestinationRef.current = dest;
         setTimeout(() => {
           mapRef.current?.animateToRegion(
@@ -1724,7 +1779,7 @@ export default function HomeScreen() {
       }
     }
   }, [params.eventLat, params.eventName]);
-  // Panel animation
+
   useEffect(() => {
     if (directions || loadingDirs) {
       Animated.spring(panelAnim, {
@@ -1760,8 +1815,10 @@ export default function HomeScreen() {
     return () => unsub();
   }, []);
 
-  // App setup
   useEffect(() => {
+    const dbUnsubscribers: (() => void)[] = [];
+    const friendUnsubscribers: (() => void)[] = [];
+
     async function setup() {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status === "granted") {
@@ -1775,7 +1832,6 @@ export default function HomeScreen() {
         setUserLocation(pos);
         userLocationRef.current = pos;
 
-        // Auto-trigger directions if coming from shuttle screen
         if (pendingDestinationRef.current) {
           const dest = pendingDestinationRef.current;
           pendingDestinationRef.current = null;
@@ -1811,17 +1867,22 @@ export default function HomeScreen() {
         locationWatchRef.current = await Location.watchPositionAsync(
           {
             accuracy: Location.Accuracy.BestForNavigation,
-            distanceInterval: 2,
-            timeInterval: 1000,
+            distanceInterval: 0,
+            timeInterval: 800,
           },
           (loc) => {
             const accuracy = loc.coords.accuracy ?? 999;
-            if (accuracy > 50) return; // ADD THIS — ignore bad GPS readings
+            const accuracyLimit = navigatingRef.current ? 180 : 120;
+            const now = Date.now();
+            const timeSinceLast = now - lastLocationTimestampRef.current;
+            const forceAccept = navigatingRef.current && timeSinceLast > 2000;  // was 3000
+            if (accuracy > accuracyLimit && !forceAccept) return;
+            lastLocationTimestampRef.current = now;
             kalmanRef.current = kalmanFilter(
               loc.coords.latitude,
               loc.coords.longitude,
               accuracy,
-              loc.coords.speed ?? 0, // pass speed
+              loc.coords.speed ?? 0,
               kalmanRef.current,
             );
             const pos = {
@@ -1839,7 +1900,7 @@ export default function HomeScreen() {
 
             setUserLocation(pos);
             const user = auth.currentUser;
-            if (user && sharingLocation) {
+            if (user && sharingLocationRef.current) {
               set(ref(database, `locations/${user.uid}`), {
                 ...pos,
                 updatedAt: Date.now(),
@@ -1848,7 +1909,6 @@ export default function HomeScreen() {
             userLocationRef.current = pos;
             handleLiveNavigationRef.current(pos, loc.coords.speed ?? 0);
 
-            // Also check here in case GPS was slow on first load
             if (pendingDestinationRef.current) {
               const dest = pendingDestinationRef.current;
               pendingDestinationRef.current = null;
@@ -1886,35 +1946,39 @@ export default function HomeScreen() {
             }
           },
         );
-        headingWatchRef.current = await Location.watchHeadingAsync((h) => {
-          // Prefer trueHeading; fall back to magHeading
-          const raw = h.trueHeading >= 0 ? h.trueHeading : h.magHeading;
 
-          // Smooth over last 5 readings
+        headingWatchRef.current = await Location.watchHeadingAsync((h) => {
+          const raw = h.trueHeading >= 0 ? h.trueHeading : h.magHeading;
           headingHistoryRef.current = [
             ...headingHistoryRef.current.slice(-4),
             raw,
           ];
+          const sinSum = headingHistoryRef.current.reduce(
+            (acc, h) => acc + Math.sin((h * Math.PI) / 180),
+            0,
+          );
+          const cosSum = headingHistoryRef.current.reduce(
+            (acc, h) => acc + Math.cos((h * Math.PI) / 180),
+            0,
+          );
           const smoothed =
-            headingHistoryRef.current.reduce((a, b) => a + b, 0) /
-            headingHistoryRef.current.length;
-
+            ((Math.atan2(sinSum, cosSum) * 180) / Math.PI + 360) % 360;
           setHeading(smoothed);
-
         });
-      }
+      } // closes: if (status === "granted")
 
       const user = auth.currentUser;
-      const friendUnsubscribers: (() => void)[] = [];
       if (user) {
         setUserId(user.uid);
 
-
-        onValue(ref(database, `users/${user.uid}`), (snap) => {
-          const d = snap.val();
-          if (d) setUserName(d.fullName || d.name || "");
-        });
-        onValue(ref(database, "users"), (snap) => {
+        const unsubUserProfile = onValue(
+          ref(database, `users/${user.uid}`),
+          (snap) => {
+            const d = snap.val();
+            if (d) setUserName(d.fullName || d.name || "");
+          },
+        );
+        const unsubAllUsers = onValue(ref(database, "users"), (snap) => {
           const data = snap.val() || {};
           setAllUsersCache(data);
           const photos: Record<string, string | null> = {};
@@ -1923,47 +1987,59 @@ export default function HomeScreen() {
           });
           setFriendPhotos(photos);
         });
-        onValue(ref(database, `friends/${user.uid}`), (snap) => {
-          // Clean up previous location listeners
-          setFriendsLoaded(true);
-          friendUnsubscribers.forEach((u) => u());
-          friendUnsubscribers.length = 0;
+        const unsubFriends = onValue(
+          ref(database, `friends/${user.uid}`),
+          (snap) => {
+            setFriendsLoaded(true);
+            friendUnsubscribers.forEach((u) => u());
+            friendUnsubscribers.length = 0;
 
-          const data = snap.val() || {};
-          const accepted = Object.entries(data)
-            .filter(([, v]: any) => v.status === "accepted")
-            .map(([uid, v]: any) => ({ uid, ...v }));
-          setFriends(accepted);
+            const data = snap.val() || {};
+            const accepted = Object.entries(data)
+              .filter(([, v]: any) => v.status === "accepted")
+              .map(([uid, v]: any) => ({ uid, ...v }));
+            setFriends(accepted);
 
-          accepted.forEach((f: any) => {
-            const unsub = onValue(
-              ref(database, `locations/${f.uid}`),
-              (locSnap) => {
-                const loc = locSnap.val();
-                if (loc)
-                  setFriendLocations((prev) => [
-                    ...prev.filter((fl) => fl.uid !== f.uid),
-                    { uid: f.uid, name: f.name, ...loc },
-                  ]);
-                else
-                  setFriendLocations((prev) =>
-                    prev.filter((fl) => fl.uid !== f.uid),
-                  );
-              },
-            );
-            friendUnsubscribers.push(unsub);
-          });
-        });
+            accepted.forEach((f: any) => {
+              const unsub = onValue(
+                ref(database, `locations/${f.uid}`),
+                (locSnap) => {
+                  const loc = locSnap.val();
+                  if (loc)
+                    setFriendLocations((prev) => [
+                      ...prev.filter((fl) => fl.uid !== f.uid),
+                      { uid: f.uid, name: f.name, ...loc },
+                    ]);
+                  else
+                    setFriendLocations((prev) =>
+                      prev.filter((fl) => fl.uid !== f.uid),
+                    );
+                },
+              );
+              friendUnsubscribers.push(unsub);
+            });
+          },
+        );
 
-        onValue(ref(database, `friendRequests/${user.uid}`), (snap) => {
-          const data = snap.val() || {};
-          const pending = Object.entries(data)
-            .filter(([, v]: any) => v.status === "pending")
-            .map(([uid, v]: any) => ({ uid, ...v }));
-          setFriendRequests(pending);
-        });
+        const unsubRequests = onValue(
+          ref(database, `friendRequests/${user.uid}`),
+          (snap) => {
+            const data = snap.val() || {};
+            const pending = Object.entries(data)
+              .filter(([, v]: any) => v.status === "pending")
+              .map(([uid, v]: any) => ({ uid, ...v }));
+            setFriendRequests(pending);
+          },
+        );
+        dbUnsubscribers.push(
+          unsubUserProfile,
+          unsubAllUsers,
+          unsubFriends,
+          unsubRequests,
+        );
       }
-      onValue(ref(database, "events"), (snap) => {
+
+      const unsubEvents = onValue(ref(database, "events"), (snap) => {
         setEventsLoaded(true);
         const data = snap.val() || {};
         setEvents(
@@ -1972,28 +2048,38 @@ export default function HomeScreen() {
             .sort((a: any, b: any) => b.createdAt - a.createdAt),
         );
       });
-      onValue(ref(database, "approvedLocations"), (snap) => {
-        setCommunityLoaded(true);
-        const data = snap.val() || {};
-        setCommunityLocations(
-          Object.entries(data).map(([id, v]: any) => ({
-            id: `comm_${id}`,
-            ...v,
-            isCommunity: true,
-          })),
-        );
-      });
+      const unsubApproved = onValue(
+        ref(database, "approvedLocations"),
+        (snap) => {
+          setCommunityLoaded(true);
+          const data = snap.val() || {};
+          setCommunityLocations(
+            Object.entries(data).map(([id, v]: any) => ({
+              id: `comm_${id}`,
+              ...v,
+              isCommunity: true,
+            })),
+          );
+        },
+      );
+      dbUnsubscribers.push(unsubEvents, unsubApproved);
     }
+
     setup();
     return () => {
       locationWatchRef.current?.remove();
       headingWatchRef.current?.remove();
+      dbUnsubscribers.forEach((u) => u());
+      friendUnsubscribers.forEach((u) => u());
       Speech.stop();
       if (speakTimeoutRef.current) clearTimeout(speakTimeoutRef.current);
+      // CHANGE 9: Clean up interpolation loop
+      if (interpolationFrameRef.current) clearInterval(interpolationFrameRef.current);
     };
   }, []);
 
   useEffect(() => {
+    sharingLocationRef.current = sharingLocation;
     const user = auth.currentUser;
     if (!user) return;
     if (!sharingLocation) remove(ref(database, `locations/${user.uid}`));
@@ -2004,28 +2090,49 @@ export default function HomeScreen() {
       });
   }, [sharingLocation]);
 
- 
-
   // ── Live navigation ────────────────────────────────────────────────────────
   const handleLiveNavigation = useCallback(
     async (pos: { latitude: number; longitude: number }, speed: number = 0) => {
+      const _sinSum = headingHistoryRef.current.reduce(
+        (acc, h) => acc + Math.sin((h * Math.PI) / 180),
+        0,
+      );
+      const _cosSum = headingHistoryRef.current.reduce(
+        (acc, h) => acc + Math.cos((h * Math.PI) / 180),
+        0,
+      );
       const smoothedHeading = headingHistoryRef.current.length
-        ? headingHistoryRef.current.reduce((a, b) => a + b, 0) /
-          headingHistoryRef.current.length
+        ? ((Math.atan2(_sinSum, _cosSum) * 180) / Math.PI + 360) % 360
         : heading;
       const dirs = directionsRef.current;
       const dest = selectedRef.current;
       if (!navigatingRef.current || !dirs || !dest) return;
 
-      const displayPos = snapToRoute(        pos,         dirs.polylinePoints,         smoothedHeading,         speed      );
-      // Arrival check
+      // CHANGE 6: snapToRoute now returns null when user is outside 12-20 m
+      // snap radius. In that case we show the real (Kalman-filtered) GPS
+      // position so the marker reflects where the user actually is, not a
+      // projected point on a road they've left. This matches Google Maps
+      // behaviour: snap when close, show real position when off-route.
+      const snapped = snapToRoute(
+        pos,
+        dirs.polylinePoints,
+        smoothedHeading,
+        speed,
+      );
+      const distFromRoute = distanceToPolylineMetres(pos, dirs.polylinePoints);
+      const displayPos = snapped ?? pos;   // real GPS when snapped is null
+      const navPos = displayPos;
+
+      // ── NEW: update distance state for CompassPointer ──
       const distToDest = haversineMetres(
-        pos.latitude,
-        pos.longitude,
+        navPos.latitude,
+        navPos.longitude,
         dest.latitude,
         dest.longitude,
       );
-      // Upcoming turn voice warning at ~200m
+      setDistanceToDestination(distToDest);
+
+      // Upcoming turn voice warning
       const currentStep = dirs.steps[activeStepRef.current] as any;
       if (currentStep?.endLocation) {
         const distToTurn = haversineMetres(
@@ -2034,27 +2141,50 @@ export default function HomeScreen() {
           currentStep.endLocation.lat,
           currentStep.endLocation.lng,
         );
-        // Speak "In 200 metres, turn right onto X" once per step
-        // 500m warning
         const WARN_500_KEY = activeStepRef.current * 10 + 1;
         const WARN_200_KEY = activeStepRef.current * 10 + 2;
 
-        if (          distToTurn < 520 &&           distToTurn > 450 &&           lastSpokenStepRef.current !== WARN_500_KEY        ) {
+        if (
+          distToTurn < 520 &&
+          distToTurn > 450 &&
+          lastSpokenStepRef.current !== WARN_500_KEY
+        ) {
           lastSpokenStepRef.current = WARN_500_KEY;
-          speakNeural(            `In 500 metres, ${stripHtml(currentStep.instruction)}`,             mutedRef.current          );
+          speakInstruction(
+            `In 500 metres, ${stripHtml(currentStep.instruction)}`,
+            mutedRef.current,
+          );
         }
-        if (          distToTurn < 220 &&           distToTurn > 150 &&           lastSpokenStepRef.current !== WARN_200_KEY        ) {
+        if (
+          distToTurn < 220 &&
+          distToTurn > 150 &&
+          lastSpokenStepRef.current !== WARN_200_KEY
+        ) {
           lastSpokenStepRef.current = WARN_200_KEY;
-          speakInstruction(            `In 200 metres, ${stripHtml(currentStep.instruction)}`,             mutedRef.current          );
+          speakInstruction(
+            `In 200 metres, ${stripHtml(currentStep.instruction)}`,
+            mutedRef.current,
+          );
         }
       }
-      // For short routes (< 200m total), use a wider arrival radius
-      const totalDist =         (dirs.steps as any[])
-?.reduce(          (acc: number, s: any) => acc + (s.distanceValue || 0), 0        ) ?? 999;
-      const dynamicArrivalThreshold =         totalDist < 200 ? 35 : ARRIVAL_THRESHOLD_M;
 
+      const totalDist =
+        (dirs.steps as any[])?.reduce(
+          (acc: number, s: any) => acc + (s.distanceValue || 0),
+          0,
+        ) ?? 999;
+      const dynamicArrivalThreshold =
+        totalDist < 200 ? 22 : ARRIVAL_THRESHOLD_M;
+
+      // Require N consecutive readings inside the threshold before declaring arrival
+      const ARRIVAL_CONSEC_REQUIRED = 4;
       if (distToDest < dynamicArrivalThreshold) {
-        if (arrivedRef.current) return;
+        arrivalCountRef.current += 1;
+        if (
+          arrivedRef.current ||
+          arrivalCountRef.current < ARRIVAL_CONSEC_REQUIRED
+        )
+          return;
         arrivedRef.current = true;
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setNavigating(false);
@@ -2074,40 +2204,40 @@ export default function HomeScreen() {
           showAlert("🎉 Arrived!", `You have reached ${dest.name}.`);
         }, 800);
         return;
+      } else {
+        arrivalCountRef.current = 0;
       }
 
       const steps = dirs.steps as any[];
 
-      // Auto-advance step
-      // Auto-advance step (handles skipping multiple steps at once)
       if (steps.length > 0) {
         let nextStep = activeStepRef.current;
-
-        // For single-step routes, skip straight to arrival check
-        if (steps.length === 1 && distToDest < ARRIVAL_THRESHOLD_M * 3) {
-          // Already handled by arrival check above, just return
-        }
 
         while (nextStep < steps.length - 1) {
           const s = steps[nextStep] as any;
           if (!s?.endLocation) break;
 
           const distToEnd = haversineMetres(
-            pos.latitude,             pos.longitude,
-            s.endLocation.lat,             s.endLocation.lng,
+            pos.latitude,
+            pos.longitude,
+            s.endLocation.lat,
+            s.endLocation.lng,
           );
 
           const nextS = steps[nextStep + 1] as any;
           const passed = nextS?.startLocation
             ? hasPassedWaypoint(
                 pos,
-                s.endLocation.lat,                 s.endLocation.lng,
-                nextS.startLocation.lat,                 nextS.startLocation.lng,
-                speed, // pass current GPS speed
+                s.endLocation.lat,
+                s.endLocation.lng,
+                nextS.startLocation.lat,
+                nextS.startLocation.lng,
+                speed,
               )
             : false;
 
-          const threshold =             travelMode === "driving"
+          const threshold =
+            travelMode === "driving"
               ? STEP_ADVANCE_DRIVING_M
               : STEP_ADVANCE_WALKING_M;
 
@@ -2117,6 +2247,7 @@ export default function HomeScreen() {
             break;
           }
         }
+
         if (nextStep !== activeStepRef.current) {
           setActiveStep(nextStep);
           activeStepRef.current = nextStep;
@@ -2156,8 +2287,6 @@ export default function HomeScreen() {
         }
       }
 
-      // Live ETA update (simple estimate based on distance remaining)
-      // Live ETA — subtract already-walked portion of current step
       const currentStepEndDist = currentStep?.endLocation
         ? haversineMetres(
             pos.latitude,
@@ -2171,21 +2300,15 @@ export default function HomeScreen() {
         (steps as any[])
           .slice(activeStepRef.current + 1)
           .reduce((acc: number, s: any) => acc + (s.distanceValue || 0), 0);
-      // OLD — delete this
-      // NEW — adaptive ETA
-      const GPS_SPEED_THRESHOLD = 0.5; // anything below 0.5 m/s is noise (standing still)
-      const WALKING_DEFAULT = 1.4; // 5 km/h fallback
-      const DRIVING_DEFAULT = 8.3; // 30 km/h fallback
 
-      // Add latest speed reading to history (keep last 5)
+      const GPS_SPEED_THRESHOLD = 0.5;
+      const WALKING_DEFAULT = 1.4;
+      const DRIVING_DEFAULT = 8.3;
+
       speedHistoryRef.current = [...speedHistoryRef.current.slice(-4), speed];
-
-      // Average the last 5 readings to smooth out GPS spikes
       const avgSpeed =
         speedHistoryRef.current.reduce((a, b) => a + b, 0) /
         speedHistoryRef.current.length;
-
-      // If averaged speed is meaningful, use it; otherwise use default
       const effectiveSpeed =
         avgSpeed > GPS_SPEED_THRESHOLD
           ? avgSpeed
@@ -2193,24 +2316,40 @@ export default function HomeScreen() {
             ? WALKING_DEFAULT
             : DRIVING_DEFAULT;
 
-      // Calculate ETA
       const etaSecs = remainingDist / effectiveSpeed;
       const etaMins = Math.round(etaSecs / 60);
       setLiveEta(etaMins < 1 ? "< 1 min" : `${etaMins} min`);
 
-      // Off-route reroute
-      // NEW — smarter rerouting with progressive cooldown
-      const distToRoute = distanceToPolylineMetres(pos, dirs.polylinePoints);
+      // CHANGE 10: distFromRoute already computed above after snap decision.
+      // Re-use it here instead of calling distanceToPolylineMetres twice.
+      const distToRoute = distFromRoute;   // removed duplicate computation
       const now = Date.now();
-      const cooldown = Math.min(        5000 * Math.pow(2, rerouteCountRef.current),         40000      );
+
+      // CHANGE 10: Debug logging — only in __DEV__ builds so it doesn't
+      // affect production performance. Shows the 4 pipeline stages:
+      // raw GPS → Kalman filtered → snap decision → distance from route.
+      if (__DEV__) {
+        console.log(
+          `[NAV] raw=(${pos.latitude.toFixed(6)},${pos.longitude.toFixed(6)})` +
+          ` filtered=(same as pos — Kalman runs in watchPosition callback)` +
+          ` snapped=${snapped ? `(${snapped.latitude.toFixed(6)},${snapped.longitude.toFixed(6)})` : 'NULL(using raw)'}` +
+          ` distFromRoute=${distToRoute.toFixed(1)}m` +
+          ` distToDest=${distToDest.toFixed(1)}m` +
+          ` speed=${speed.toFixed(2)}m/s`
+        );
+      }
+      const cooldown = Math.min(
+        5000 * Math.pow(2, rerouteCountRef.current),
+        40000,
+      );
       const gpsIsReliable = (kalmanRef.current?.variance ?? 999) < 100;
 
-      if (        distToRoute > REROUTE_THRESHOLD_M &&         gpsIsReliable &&         distToDest > 40      ) {
-        // Increment consecutive off-route counter
+      if (
+        distToRoute > REROUTE_THRESHOLD_M &&
+        gpsIsReliable &&
+        distToDest > 40
+      ) {
         consecutiveOffRouteRef.current += 1;
-
-        // Only reroute if CONSISTENTLY off-route for 3+ readings
-        // This prevents rerouting from a single bad GPS reading
         const shouldReroute =
           consecutiveOffRouteRef.current >= 3 &&
           now - lastRerouteTimeRef.current > cooldown;
@@ -2221,21 +2360,21 @@ export default function HomeScreen() {
           rerouteCountRef.current += 1;
           consecutiveOffRouteRef.current = 0;
 
-          setRerouting(true);;
+          setRerouting(true);
 
-          // Voice varies based on how many times we've rerouted
           const rerouteMessage =
             rerouteCountRef.current === 1
               ? "Recalculating route."
               : rerouteCountRef.current === 2
                 ? "Off route. Finding new path."
-                : "Route updated."; // shorter message after repeated reroutes
+                : "Route updated.";
           speakInstruction(rerouteMessage, mutedRef.current);
 
-          // On-campus reroutes also prefer walking
           const CAMPUS_BOUNDS = {
-            minLat: 6.512,             maxLat: 6.522,
-            minLng: 3.383,             maxLng: 3.402,
+            minLat: 6.512,
+            maxLat: 6.522,
+            minLng: 3.383,
+            maxLng: 3.402,
           };
           const bothOnCampus =
             pos.latitude > CAMPUS_BOUNDS.minLat &&
@@ -2260,7 +2399,6 @@ export default function HomeScreen() {
           setRerouting(false);
 
           if (result) {
-            // Success — reset reroute count
             rerouteCountRef.current = 0;
             setDirections(result);
             directionsRef.current = result;
@@ -2270,8 +2408,11 @@ export default function HomeScreen() {
 
             const firstStep = result?.steps[0] as any;
             if (firstStep) {
-              lastSpokenStepRef.current = 9; // marks step 0 as already spoken (0 * 10 + 9)
-              speakInstruction(                `Starting navigation. ${stripHtml(firstStep.instruction)}`,                 muted              );
+              lastSpokenStepRef.current = 9;
+              speakInstruction(
+                `Starting navigation. ${stripHtml(firstStep.instruction)}`,
+                muted,
+              );
             }
 
             mapRef.current?.fitToCoordinates(
@@ -2286,7 +2427,6 @@ export default function HomeScreen() {
               },
             );
           } else {
-            // Failed to get new route — back off longer next time
             speakInstruction(
               "Could not find a new route. Continue if possible.",
               mutedRef.current,
@@ -2294,20 +2434,26 @@ export default function HomeScreen() {
           }
         }
       } else {
-        // Back on route — reset consecutive counter
         consecutiveOffRouteRef.current = 0;
 
-        // Camera follow
         if (followUser && navigatingRef.current) {
-          const zoom =             travelMode === "driving"
-              ? (speed > 13                 ? 15                 : speed > 6                   ? 16                   : 17)
+          const zoom =
+            travelMode === "driving"
+              ? speed > 13
+                ? 15
+                : speed > 6
+                  ? 16
+                  : 17
               : 19;
-          mapRef.current?.animateCamera(            {
+          mapRef.current?.animateCamera(
+            {
               center: { latitude: pos.latitude, longitude: pos.longitude },
               zoom,
               pitch: travelMode === "driving" ? 55 : 65,
               heading: smoothedHeading,
-            },             { duration: 300 }          );
+            },
+            { duration: 300 },
+          );
         }
       }
     },
@@ -2430,7 +2576,6 @@ export default function HomeScreen() {
 
     let location = userLocation;
 
-    // If location isn't ready yet, fetch it now
     if (!location) {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
@@ -2470,8 +2615,10 @@ export default function HomeScreen() {
     setLiveEta("");
 
     const CAMPUS_BOUNDS = {
-      minLat: 6.512,       maxLat: 6.522,
-      minLng: 3.383,       maxLng: 3.402,
+      minLat: 6.512,
+      maxLat: 6.522,
+      minLng: 3.383,
+      maxLng: 3.402,
     };
     const originOnCampus =
       location.latitude > CAMPUS_BOUNDS.minLat &&
@@ -2483,7 +2630,6 @@ export default function HomeScreen() {
       selected.latitude < CAMPUS_BOUNDS.maxLat &&
       selected.longitude > CAMPUS_BOUNDS.minLng &&
       selected.longitude < CAMPUS_BOUNDS.maxLng;
-
     const effectiveMode =
       originOnCampus && destOnCampus ? "walking" : travelMode;
 
@@ -2520,16 +2666,13 @@ export default function HomeScreen() {
       handleGetDirections();
     }
   }, [travelMode]);
-  // Load saved travel mode on startup
+
   useEffect(() => {
     AsyncStorage.getItem("travelMode").then((saved) => {
-      if (saved === "walking" || saved === "driving") {
-        setTravelMode(saved);
-      }
+      if (saved === "walking" || saved === "driving") setTravelMode(saved);
     });
   }, []);
 
-  // Save travel mode when it changes
   useEffect(() => {
     AsyncStorage.setItem("travelMode", travelMode);
   }, [travelMode]);
@@ -2538,11 +2681,10 @@ export default function HomeScreen() {
     speedHistoryRef.current = [];
     rerouteCountRef.current = 0;
     consecutiveOffRouteRef.current = 0;
-    rerouteCountRef.current = 0;
-    consecutiveOffRouteRef.current = 0;
     lastRerouteTimeRef.current = 0;
     arrivedRef.current = false;
     isReroutingRef.current = false;
+    setDistanceToDestination(9999); // ── NEW: reset on start
 
     setNavigating(true);
     setActiveStep(0);
@@ -2572,11 +2714,12 @@ export default function HomeScreen() {
   function handleStopNavigation() {
     setNavigating(false);
     setFollowUser(false);
+    setDistanceToDestination(9999); // ── NEW: reset on stop
     Speech.stop();
     setLiveEta("");
-    mapRef.current?.animateCamera(            // ← ADD THIS BLOCK
+    mapRef.current?.animateCamera(
       { heading: 0, pitch: 0, zoom: 16 },
-      { duration: 600 }
+      { duration: 600 },
     );
     if (directions && userLocation && selected) {
       mapRef.current?.fitToCoordinates(
@@ -2599,6 +2742,7 @@ export default function HomeScreen() {
     setActiveStep(0);
     setRerouting(false);
     setFollowUser(false);
+    setDistanceToDestination(9999); // ── NEW: reset on cancel
     Speech.stop();
     setLiveEta("");
   }
@@ -2622,16 +2766,13 @@ export default function HomeScreen() {
       showAlert("Location unavailable", "Your location isn't ready yet.", "📍");
       return;
     }
-    const url = `https://maps.google.com/?q=${userLocation.latitude},${userLocation.longitude}`;
+    const url = `[maps.google.com](https://maps.google.com/?q=${userLocation.latitude},${userLocation.longitude})`;
     await Share.share({
       message: `My current location on UNILAG campus: ${url}`,
       title: "Share My Location",
     });
   }
 
-
-
-  // Buildings whose coordinates are "taken" by an event marker
   const eventOccupiedCoords = new Set(
     events
       .filter((ev) => ev.latitude && ev.longitude)
@@ -2649,28 +2790,37 @@ export default function HomeScreen() {
       description: loc.description || "Community location",
       category: loc.category || "other",
     })),
-  ]    .filter((b) => {
+  ]
+    .filter((b) => {
       const coordKey = `${b.latitude?.toFixed(4)},${b.longitude?.toFixed(4)}`;
       if (eventOccupiedCoords.has(coordKey)) return false;
-
       const matchesCategory =
         search.length > 0 || filterCat === "all" || b.category === filterCat;
       const matchesSearch =
         b.name.toLowerCase().includes(search.toLowerCase()) ||
         b.description.toLowerCase().includes(search.toLowerCase()) ||
         b.category.toLowerCase().includes(search.toLowerCase());
-
       return matchesCategory && matchesSearch;
     })
     .sort((a, b) => {
       if (!userLocation) return 0;
       return (
-        haversineMetres(          userLocation.latitude,           userLocation.longitude,           a.latitude,           a.longitude        ) -
-        haversineMetres(          userLocation.latitude,           userLocation.longitude,           b.latitude,           b.longitude        )
+        haversineMetres(
+          userLocation.latitude,
+          userLocation.longitude,
+          a.latitude,
+          a.longitude,
+        ) -
+        haversineMetres(
+          userLocation.latitude,
+          userLocation.longitude,
+          b.latitude,
+          b.longitude,
+        )
       );
     });
 
-// ── Google Maps style top instruction banner (during navigation) ───────────
+  // ── Google Maps style top instruction banner ───────────────────────────────
   function renderNavBanner() {
     if (!navigating || !directions) return null;
     const step = directions.steps[activeStep] as any;
@@ -2680,42 +2830,35 @@ export default function HomeScreen() {
 
     return (
       <View style={styles.navBannerContainer}>
-{/* Rerouting overlay */}
         {rerouting && (
           <View style={styles.reroutingOverlay}>
             <ActivityIndicator color="#fff" size="small" />
             <Text style={styles.reroutingOverlayText}> Rerouting…</Text>
           </View>
         )}
-{/* Main direction card */}
         <View style={styles.navBannerCard}>
-{/* Arrow box */}
           <View style={styles.navArrowBox}>
             <Text style={styles.navArrowText}>{arrow}</Text>
           </View>
-{/* Instruction text */}
           <View style={styles.navInstructionBox}>
             <Text style={styles.navInstructionText} numberOfLines={2}>
               {stripHtml(step.instruction)}
             </Text>
             <Text style={styles.navInstructionDist}>In {step.distance}</Text>
           </View>
-          {/* Mute button */}
-            <TouchableOpacity
-              style={styles.muteBtn}
-              onPress={() => setMuted((v) => !v)}
-            >
-              <Text style={styles.muteBtnText}>{muted ? "🔇" : "🔊"}</Text>
-            </TouchableOpacity>
-{/* AR button — INSIDE the card ✅ */}
-            <TouchableOpacity
-              style={styles.arBtn}
-              onPress={() => setArMode(true)}
-            >
-              <Text style={styles.arBtnText}>📷 AR</Text>
-            </TouchableOpacity>
-          </View>   {/* ← closes navBannerCard */}
-        {/* Next step strip */}
+          <TouchableOpacity
+            style={styles.muteBtn}
+            onPress={() => setMuted((v) => !v)}
+          >
+            <Text style={styles.muteBtnText}>{muted ? "🔇" : "🔊"}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.arBtn}
+            onPress={() => setArMode(true)}
+          >
+            <Text style={styles.arBtnText}>📷 AR</Text>
+          </TouchableOpacity>
+        </View>
         {nextStep && (
           <View style={styles.navNextStrip}>
             <Text style={styles.navNextLabel}>Then </Text>
@@ -2732,7 +2875,7 @@ export default function HomeScreen() {
     );
   }
 
-  // ── ETA / Distance bar (during navigation) ─────────────────────────────────
+  // ── ETA bar ────────────────────────────────────────────────────────────────
   function renderNavEtaBar() {
     if (!navigating || !directions) return null;
 
@@ -2741,60 +2884,52 @@ export default function HomeScreen() {
         ? speedHistoryRef.current.reduce((a, b) => a + b, 0) /
           speedHistoryRef.current.length
         : 0;
-
     const speedKmh = Math.round(avgSpeed * 3.6);
     const speedLabel = speedKmh > 1 ? `${speedKmh} km/h` : "–";
 
-const distanceNum = parseFloat(directions.totalDistance);
-  const stepsLabel = !isNaN(distanceNum)
-    ? `~${Math.round(distanceNum * 1000 / 0.762)} steps`
-    : "steps";
+    const distanceNum = parseFloat(directions.totalDistance);
+    const stepsLabel = !isNaN(distanceNum)
+      ? `~${Math.round((distanceNum * 1000) / 0.762)} steps`
+      : "steps";
 
     return (
       <View style={styles.etaBar}>
-                  {/* ETA */}
-          <View style={styles.etaItem}>
-            <Text style={styles.etaValue}>
-              {liveEta || directions.totalDuration}
-            </Text>
-            <Text style={styles.etaLabel}>ETA</Text>
-          </View>
-<View style={styles.etaDivider} />
-
-          {/* Distance or Steps */}
-          <View style={styles.etaItem}>
-            <Text style={styles.etaValue}>{directions.totalDistance}            </Text>
-            <Text style={styles.etaLabel}>
-              {travelMode === "walking" ? stepsLabel : "Distance"}
-            </Text>
-          </View>
-<View style={styles.etaDivider} />
-
-      {/* Speed */}
-      <View style={styles.etaItem}>
-        <Text style={styles.etaValue}>{speedLabel}</Text>
-        <Text style={styles.etaLabel}>Speed</Text>
+        <View style={styles.etaItem}>
+          <Text style={styles.etaValue}>
+            {liveEta || directions.totalDuration}
+          </Text>
+          <Text style={styles.etaLabel}>ETA</Text>
+        </View>
+        <View style={styles.etaDivider} />
+        <View style={styles.etaItem}>
+          <Text style={styles.etaValue}>{directions.totalDistance}</Text>
+          <Text style={styles.etaLabel}>
+            {travelMode === "walking" ? stepsLabel : "Distance"}
+          </Text>
+        </View>
+        <View style={styles.etaDivider} />
+        <View style={styles.etaItem}>
+          <Text style={styles.etaValue}>{speedLabel}</Text>
+          <Text style={styles.etaLabel}>Speed</Text>
+        </View>
+        <View style={styles.etaDivider} />
+        <View style={styles.etaItem}>
+          <Text style={styles.etaValue}>
+            {travelMode === "walking" ? "🚶" : "🚗"}
+          </Text>
+          <Text style={styles.etaLabel}>{travelMode}</Text>
+        </View>
+        <TouchableOpacity
+          style={styles.etaEndBtn}
+          onPress={handleStopNavigation}
+        >
+          <Text style={styles.etaEndText}>End</Text>
+        </TouchableOpacity>
       </View>
-      <View style={styles.etaDivider} />
-
-          {/* Mode */}
-          <View style={styles.etaItem}>
-            <Text style={styles.etaValue}>
-              {travelMode === "walking" ? "🚶" : "🚗"}
-            </Text>
-<Text style={styles.etaLabel}>{travelMode}</Text>
-          </View>
-
-          {/* End button */}
-          <TouchableOpacity             style={styles.etaEndBtn}             onPress={handleStopNavigation}          >
-            <Text style={styles.etaEndText}>End</Text>
-          </TouchableOpacity>
-              </View>
     );
   }
 
-
-  // ── Directions bottom panel (Google Maps style) ────────────────────────────
+  // ── Directions panel ───────────────────────────────────────────────────────
   function renderDirectionsPanel() {
     if (loadingDirs)
       return (
@@ -2808,156 +2943,76 @@ const distanceNum = parseFloat(directions.totalDistance);
       );
     if (!directions) return null;
 
-    const progressPct =
-      (activeStep / Math.max(directions.steps.length - 1, 1)) * 100;
-
     return (
       <>
-        {/* ← Only show summary row when NOT navigating */}
         {!navigating && (
-          <View style={styles.dirSummaryRow}>
-            <View>
-              <Text style={styles.dirDuration}>
-                {liveEta || directions.totalDuration}
-              </Text>
-              <Text style={styles.dirDistMode}>
-                {directions.totalDistance} · {travelMode}
-              </Text>
+          <>
+            <View style={styles.dirSummaryRow}>
+              <View>
+                <Text style={styles.dirDuration}>
+                  {liveEta || directions.totalDuration}
+                </Text>
+                <Text style={styles.dirDistMode}>
+                  {directions.totalDistance} · {travelMode}
+                </Text>
+              </View>
+              <View style={styles.dirActions}>
+                <TouchableOpacity
+                  style={styles.startNavBtn}
+                  onPress={handleStartNavigation}
+                >
+                  <Text style={styles.startNavBtnText}>▶ Start</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.cancelBtn}
+                  onPress={handleCancelDirections}
+                >
+                  <Text style={styles.cancelBtnText}>✕</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-            <View style={styles.dirActions}>
+            <View style={styles.modeRow}>
               <TouchableOpacity
-                style={styles.startNavBtn}
-                onPress={handleStartNavigation}
-              >
-                <Text style={styles.startNavBtnText}>▶ Start</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={handleCancelDirections}
-              >
-                <Text style={styles.cancelBtnText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* Progress bar */}
-        <View style={styles.progressBar}>
-          <View
-            style={[styles.progressFill, { width: `${progressPct}%` as any }]}
-          />
-        </View>
-
-        {/* Travel mode toggle (only when not navigating) */}
-        {!navigating && (
-          <View style={styles.modeRow}>
-            <TouchableOpacity
-              style={[
-                styles.modeBtn,
-                travelMode === "walking" && styles.modeBtnActive,
-              ]}
-              onPress={() => setTravelMode("walking")}
-            >
-              <Text style={styles.modeBtnIcon}>🚶</Text>
-              <Text
                 style={[
-                  styles.modeBtnText,
-                  travelMode === "walking" && styles.modeBtnTextActive,
+                  styles.modeBtn,
+                  travelMode === "walking" && styles.modeBtnActive,
                 ]}
+                onPress={() => setTravelMode("walking")}
               >
-                Walk
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.modeBtn,
-                travelMode === "driving" && styles.modeBtnActive,
-              ]}
-              onPress={() => setTravelMode("driving")}
-            >
-              <Text style={styles.modeBtnIcon}>🚗</Text>
-              <Text
-                style={[
-                  styles.modeBtnText,
-                  travelMode === "driving" && styles.modeBtnTextActive,
-                ]}
-              >
-                Drive
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Steps list */}
-        <ScrollView
-          ref={stepsScrollRef}
-          style={styles.stepsList}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          {(directions.steps as any[]).map((step: any, index: number) => {
-            const isDone = index < activeStep;
-            const isCurrent = index === activeStep;
-            return (
-              <TouchableOpacity
-                key={index}
-                style={[
-                  styles.stepRow,
-                  isCurrent && styles.stepRowActive,
-                  isDone && styles.stepRowDone,
-                ]}
-                onPress={() => setActiveStep(index)}
-                activeOpacity={0.7}
-              >
-                <View
+                <Text style={styles.modeBtnIcon}>🚶</Text>
+                <Text
                   style={[
-                    styles.stepBullet,
-                    isCurrent && styles.stepBulletActive,
-                    isDone && styles.stepBulletDone,
+                    styles.modeBtnText,
+                    travelMode === "walking" && styles.modeBtnTextActive,
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.stepBulletText,
-                      (isCurrent || isDone) && styles.stepBulletTextLight,
-                    ]}
-                  >
-                    {isDone ? "✓" : getDirectionLabel(step.maneuver)}
-                  </Text>
-                </View>
-                <View style={styles.stepBody}>
-                  <Text
-                    style={[
-                      styles.stepInstruction,
-                      isCurrent && styles.stepInstructionActive,
-                      isDone && styles.stepInstructionDone,
-                    ]}
-                    numberOfLines={2}
-                  >
-                    {stripHtml(step.instruction)}
-                  </Text>
-                  <Text style={styles.stepMeta}>
-                    {step.distance} · {step.duration}
-                  </Text>
-                </View>
-                {isCurrent && <View style={styles.stepActivePip} />}
+                  Walk
+                </Text>
               </TouchableOpacity>
-            );
-          })}
-          <View style={[styles.stepRow, { borderBottomWidth: 0 }]}>
-            <View style={[styles.stepBullet, { backgroundColor: "#1a5c38" }]}>
-              <Text style={styles.stepBulletText}>🏁</Text>
+              <TouchableOpacity
+                style={[
+                  styles.modeBtn,
+                  travelMode === "driving" && styles.modeBtnActive,
+                ]}
+                onPress={() => setTravelMode("driving")}
+              >
+                <Text style={styles.modeBtnIcon}>🚗</Text>
+                <Text
+                  style={[
+                    styles.modeBtnText,
+                    travelMode === "driving" && styles.modeBtnTextActive,
+                  ]}
+                >
+                  Drive
+                </Text>
+              </TouchableOpacity>
             </View>
-            <View style={styles.stepBody}>
-              <Text style={[styles.stepInstruction, { color: "#1a5c38" }]}>
-                {selected?.name}
-              </Text>
-              <Text style={styles.stepMeta}>Destination</Text>
-            </View>
-          </View>
-          <View style={{ height: 16 }} />
-        </ScrollView>
+          </>
+        )}
+        <ScrollView
+          ref={stepsScrollRef}
+          style={{ height: 0, overflow: "hidden" }}
+        />
       </>
     );
   }
@@ -2969,6 +3024,7 @@ const distanceNum = parseFloat(directions.totalDistance);
         style={styles.friendsScroll}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         <Text style={styles.tabTitle}>👥 Friends</Text>
         <View style={styles.sharingCard}>
@@ -3174,7 +3230,6 @@ const distanceNum = parseFloat(directions.totalDistance);
 
                       const location = userLocationRef.current;
                       if (!location) {
-                        // No GPS yet — just pan to friend
                         mapRef.current?.animateToRegion(
                           {
                             latitude: loc.latitude,
@@ -3250,6 +3305,8 @@ const distanceNum = parseFloat(directions.totalDistance);
         <ScrollView
           style={styles.buildingsList}
           showsVerticalScrollIndicator={false}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
         >
           {events.length === 0 ? (
             <Text style={styles.emptyText}>
@@ -3307,7 +3364,6 @@ const distanceNum = parseFloat(directions.totalDistance);
 
     return (
       <>
-        {/* HOME TAB */}
         <View style={{ display: activeTab === "home" ? "flex" : "none" }}>
           <View style={styles.searchBar}>
             <Text style={styles.searchIcon}>🔍</Text>
@@ -3370,7 +3426,6 @@ const distanceNum = parseFloat(directions.totalDistance);
                         }, 100);
                       }
                     } else {
-                      // "All" — zoom out to show full campus
                       mapRef.current?.animateToRegion(
                         {
                           latitude: 6.517,
@@ -3399,11 +3454,11 @@ const distanceNum = parseFloat(directions.totalDistance);
             })}
           </ScrollView>
 
-
           {search.length > 0 ? (
             <ScrollView
               style={styles.searchResults}
               keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
             >
               {visibleBuildings.map((b) => (
                 <TouchableOpacity
@@ -3498,6 +3553,8 @@ const distanceNum = parseFloat(directions.totalDistance);
           <ScrollView
             style={styles.buildingsList}
             showsVerticalScrollIndicator={false}
+            keyboardDismissMode="on-drag"
+            keyboardShouldPersistTaps="handled"
           >
             {BUILDINGS.filter(
               (b) => filterCat === "all" || b.category === filterCat,
@@ -3552,7 +3609,7 @@ const distanceNum = parseFloat(directions.totalDistance);
           </ScrollView>
         </View>
 
-        {/* FRIENDS TAB — always mounted, hidden when inactive */}
+        {/* FRIENDS TAB */}
         <View style={{ display: activeTab === "friends" ? "flex" : "none" }}>
           {!friendsLoaded ? (
             <>
@@ -3564,7 +3621,7 @@ const distanceNum = parseFloat(directions.totalDistance);
           )}
         </View>
 
-        {/* EVENTS TAB — always mounted, hidden when inactive */}
+        {/* EVENTS TAB */}
         <View style={{ display: activeTab === "events" ? "flex" : "none" }}>
           {!eventsLoaded ? (
             <>
@@ -3574,6 +3631,10 @@ const distanceNum = parseFloat(directions.totalDistance);
           ) : (
             renderEventsTab()
           )}
+        </View>
+        {/* SERVICES TAB */}
+        <View style={{ display: activeTab === "services" ? "flex" : "none", flex: 1 }}>
+          <ServicesTab userId={userId} userName={userName} />
         </View>
       </>
     );
@@ -3619,10 +3680,11 @@ const distanceNum = parseFloat(directions.totalDistance);
   }
 
   const bottomSheetTall =
-    activeTab === "buildings" ||
-    activeTab === "friends" ||
-    activeTab === "events" ||
-    !!directions;
+  activeTab === "buildings" ||
+  activeTab === "friends" ||
+  activeTab === "events" ||
+  activeTab === "services" ||   // ← ADD THIS LINE
+  !!directions;
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
@@ -3651,13 +3713,13 @@ const distanceNum = parseFloat(directions.totalDistance);
         }}
         customMapStyle={[]}
       >
-        {userLocation && (
+        {(displayUserLocation ?? userLocation) && (
           <Marker
-            coordinate={userLocation}
-            anchor={{ x: 0.5, y: 0.5 }}
-            flat={true}
-            rotation={heading}
-          >
+            coordinate={displayUserLocation ?? userLocation!}
+          anchor={{ x: 0.5, y: 0.5 }}
+          flat={true}
+          rotation={smoothedHeading}   // CHANGE 8: was `heading` (jerky raw value)
+        >
             <View
               style={{
                 width: 80,
@@ -3666,7 +3728,6 @@ const distanceNum = parseFloat(directions.totalDistance);
                 alignItems: "center",
               }}
             >
-              {/* Accuracy ring */}
               <View
                 style={{
                   position: "absolute",
@@ -3676,7 +3737,6 @@ const distanceNum = parseFloat(directions.totalDistance);
                   backgroundColor: "rgba(66,133,244,0.15)",
                 }}
               />
-              {/* Direction beam (cone) */}
               {navigating && (
                 <View
                   style={{
@@ -3694,7 +3754,6 @@ const distanceNum = parseFloat(directions.totalDistance);
                   }}
                 />
               )}
-              {/* White outer ring */}
               <View
                 style={{
                   width: 22,
@@ -3709,7 +3768,6 @@ const distanceNum = parseFloat(directions.totalDistance);
                   elevation: 6,
                 }}
               >
-                {/* Blue inner dot */}
                 <View
                   style={{
                     width: 14,
@@ -3722,6 +3780,7 @@ const distanceNum = parseFloat(directions.totalDistance);
             </View>
           </Marker>
         )}
+
         {visibleBuildings.map((building) => (
           <BuildingMarker
             key={building.id}
@@ -3733,11 +3792,13 @@ const distanceNum = parseFloat(directions.totalDistance);
             }}
           />
         ))}
+
         {friendLocations
           .filter((f) => Date.now() - (f.updatedAt || 0) < 5 * 60 * 1000)
           .map((f) => (
             <FriendMarker key={f.uid} friend={f} photo={friendPhotos[f.uid]} />
           ))}
+
         {communityLocations.map((loc) => (
           <Marker
             key={loc.id}
@@ -3764,6 +3825,7 @@ const distanceNum = parseFloat(directions.totalDistance);
             <View style={[mStyles.pinTail, { borderTopColor: "#7c3aed" }]} />
           </Marker>
         ))}
+
         {events
           .filter((ev) => ev.latitude && ev.longitude)
           .map((ev) => (
@@ -3786,44 +3848,11 @@ const distanceNum = parseFloat(directions.totalDistance);
             </Marker>
           ))}
 
-        {/* ── SERVICE MARKERS — placed here, AFTER events block ── */}
-        {serviceMarkers.map((service) => (
-          <Marker
-            key={`svc_${service.id}`}
-            coordinate={{
-              latitude: service.latitude,
-              longitude: service.longitude,
-            }}
-            onPress={() => {
-              setSelected({
-                name: service.name,
-                latitude: service.latitude,
-                longitude: service.longitude,
-                icon: "🛍️",
-                description: `${service.category} · ${service.phone}`,
-                category: "service",
-              });
-              setDirections(null);
-              setNavigating(false);
-            }}
-            anchor={{ x: 0.5, y: 1 }}
-            tracksViewChanges={false}
-          >
-            <View
-              style={[
-                mStyles.pin,
-                { backgroundColor: "#6C63FF", borderColor: "#EEE8FF" },
-              ]}
-            >
-              <Text style={mStyles.emoji}>🛍️</Text>
-            </View>
-            <View style={[mStyles.pinTail, { borderTopColor: "#6C63FF" }]} />
-          </Marker>
-        ))}
+        
+        
         {directions &&
           userLocation &&
           (() => {
-            // Find where user is on the route
             let closestIdx = 0;
             let minDist = Infinity;
             directions.polylinePoints.forEach((pt, i) => {
@@ -3838,10 +3867,8 @@ const distanceNum = parseFloat(directions.totalDistance);
                 closestIdx = i;
               }
             });
-
             const traveled = directions.polylinePoints.slice(0, closestIdx + 1);
             const remaining = directions.polylinePoints.slice(closestIdx);
-
             return (
               <>
                 {navigating && traveled.length > 1 && (
@@ -3868,6 +3895,30 @@ const distanceNum = parseFloat(directions.totalDistance);
       {renderLegend()}
       {renderNavBanner()}
       {renderNavEtaBar()}
+
+      {/* ── COMPASS POINTER (auto-shows under 200m while navigating) ── */}
+      {navigating &&
+        userLocation &&
+        selected &&
+        distanceToDestination <= 200 &&
+        distanceToDestination > 15 && (
+          <View
+            style={{
+              position: "absolute",
+              bottom: Platform.OS === "ios" ? 200 : 175,
+              left: 0,
+              right: 0,
+            }}
+          >
+            <CompassPointer
+              userLat={userLocation.latitude}
+              userLng={userLocation.longitude}
+              destLat={selected.latitude}
+              destLng={selected.longitude}
+              distanceMetres={distanceToDestination}
+            />
+          </View>
+        )}
 
       {/* Re-centre button */}
       {navigating && !followUser && (
@@ -3897,7 +3948,7 @@ const distanceNum = parseFloat(directions.totalDistance);
         </TouchableOpacity>
       )}
 
-      {/* ── TOP BAR (hidden during navigation) ── */}
+      {/* ── TOP BAR ── */}
       {!navigating && (
         <View style={styles.topBar}>
           <View style={styles.topLeft}>
@@ -3922,7 +3973,10 @@ const distanceNum = parseFloat(directions.totalDistance);
               </Text>
             </View>
           )}
-          <TouchableOpacity             style={styles.shareBtn}             onPress={handleShareLocation}          >
+          <TouchableOpacity
+            style={styles.shareBtn}
+            onPress={handleShareLocation}
+          >
             <Text style={styles.shareBtnText}>↗</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
@@ -3983,8 +4037,7 @@ const distanceNum = parseFloat(directions.totalDistance);
       {/* ── BOTTOM SHEET ── */}
       {!navigating && (
         <KeyboardAvoidingView
-          behavior="padding"
-          keyboardVerticalOffset={0}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={styles.keyboardAvoid}
         >
           <View
@@ -3993,14 +4046,28 @@ const distanceNum = parseFloat(directions.totalDistance);
               bottomSheetTall && styles.bottomSheetTall,
             ]}
           >
-            {renderBottomContent()}
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ flexGrow: 1 }}
+            >
+              {renderBottomContent()}
+            </ScrollView>
             {!directions && !loadingDirs && (
-              <View style={styles.bottomNav}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.bottomNavScroll}
+                contentContainerStyle={styles.bottomNavContent}
+                keyboardShouldPersistTaps="handled"
+              >
                 {[
-                  { tab: "home", icon: "🏠", label: "Home" },
+                  { tab: "home",      icon: "🏠", label: "Home" },
                   { tab: "buildings", icon: "📍", label: "Places" },
-                  { tab: "friends", icon: "👥", label: "Friends" },
-                  { tab: "events", icon: "🗓️", label: "Events" },
+                  { tab: "friends",   icon: "👥", label: "Friends" },
+                  { tab: "events",    icon: "🗓️", label: "Events" },
+                  { tab: "services",  icon: "🛍️", label: "Services" },
                 ].map(({ tab, icon, label }) => (
                   <TouchableOpacity
                     key={tab}
@@ -4011,7 +4078,6 @@ const distanceNum = parseFloat(directions.totalDistance);
                     onPress={() => {
                       setActiveTab(tab);
                       if (tab === "buildings") {
-                        // Zoom out to show all campus markers
                         mapRef.current?.animateToRegion(
                           {
                             latitude: 6.517,
@@ -4051,40 +4117,40 @@ const distanceNum = parseFloat(directions.totalDistance);
                   <Text style={styles.navIcon}>👤</Text>
                   <Text style={styles.navLabel}>Account</Text>
                 </TouchableOpacity>
-              </View>
+              </ScrollView>
             )}
           </View>
-        </KeyboardAvoidingView>
+</KeyboardAvoidingView>
       )}
 
-      {/* ── Steps sheet (shown during navigation, slide up from bottom) ── */}
+      {/* ── NAVIGATION STEPS SHEET ── */}
       {navigating && directions && (
         <View style={styles.navStepsSheet}>{renderDirectionsPanel()}</View>
       )}
-{/* ── AR MODE OVERLAY ── */}        {/* ← ADD THIS */}
-      {arMode && navigating && directions && selected && userLocation && (
-                  <ARNavigation
-            userLocation={userLocation}
-            destination={selected}
-            heading={smoothedHeading}
-            currentInstruction={              (directions.steps[activeStep] as any)?.instruction ?? ""            }
-            distanceToNext={              (directions.steps[activeStep] as any)?.distance ?? ""            }
-            nextManeuver={(directions.steps[activeStep] as any)?.maneuver ?? ""}
-            eta={liveEta || directions.totalDuration}
-            onExit={() => setArMode(false)}
-          />
-              )}
 
+      {/* ── AR MODE OVERLAY ── */}
+      {arMode && navigating && directions && selected && userLocation && (
+        <ARNavigation
+          userLocation={userLocation}
+          destination={selected}
+          heading={smoothedHeading}
+          currentInstruction={
+            (directions.steps[activeStep] as any)?.instruction ?? ""
+          }
+          distanceToNext={(directions.steps[activeStep] as any)?.distance ?? ""}
+          nextManeuver={(directions.steps[activeStep] as any)?.maneuver ?? ""}
+          eta={liveEta || directions.totalDuration}
+          onExit={() => setArMode(false)}
+        />
+      )}
     </View>
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1 },
   map: { flex: 1 },
 
-  // ── Top bar ──
   topBar: {
     position: "absolute",
     top: 55,
@@ -4111,7 +4177,12 @@ const styles = StyleSheet.create({
   },
   logoutBtn: { backgroundColor: "#f5f5f5", borderRadius: 8, padding: 8 },
   logoutText: { fontSize: 18 },
-  shareBtn: {     backgroundColor: "#e8f5ee",     borderRadius: 8,     padding: 8,     marginRight: 6   },
+  shareBtn: {
+    backgroundColor: "#e8f5ee",
+    borderRadius: 8,
+    padding: 8,
+    marginRight: 6,
+  },
   shareBtnText: { fontSize: 18, color: "#1a5c38" },
   sharingPill: {
     borderRadius: 12,
@@ -4134,7 +4205,6 @@ const styles = StyleSheet.create({
   },
   requestBadgeText: { color: "#fff", fontSize: 11, fontWeight: "700" },
 
-  // ── Legend ──
   legend: {
     position: "absolute",
     top: 130,
@@ -4151,7 +4221,6 @@ const styles = StyleSheet.create({
   legendDot: { width: 10, height: 10, borderRadius: 5, marginRight: 6 },
   legendLabel: { fontSize: 11, color: "#555" },
 
-  // ── Selected / event card ──
   selectedCard: {
     position: "absolute",
     top: 130,
@@ -4180,86 +4249,82 @@ const styles = StyleSheet.create({
   },
   directionsBtnText: { color: "#fff", fontSize: 12, fontWeight: "700" },
 
-  // ── Google Maps Navigation Banner (top, during navigation) ──
-navBannerContainer: {
-  position: "absolute",
-  top: 0,
-  left: 0,
-  right: 0,
-  zIndex: 20,
-},
-reroutingOverlay: {
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "center",
-  backgroundColor: "#e8711a",
-  paddingVertical: 10,
-},
-reroutingOverlayText: {   color: "#fff",   fontWeight: "700",   fontSize: 14 },
+  navBannerContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 20,
+  },
+  reroutingOverlay: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#e8711a",
+    paddingVertical: 10,
+  },
+  reroutingOverlayText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  navBannerCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#1A73E8",
+    paddingTop: Platform.OS === "ios" ? 54 : 32,
+    paddingBottom: 14,
+    paddingHorizontal: 16,
+  },
+  navArrowBox: {
+    width: 52,
+    height: 52,
+    borderRadius: 10,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 14,
+  },
+  navArrowText: { fontSize: 28, color: "#fff", fontWeight: "900" },
+  navInstructionBox: { flex: 1 },
+  navInstructionText: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#fff",
+    lineHeight: 24,
+  },
+  navInstructionDist: {
+    fontSize: 13,
+    color: "rgba(255,255,255,0.8)",
+    marginTop: 3,
+  },
+  muteBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginLeft: 10,
+  },
+  muteBtnText: { fontSize: 20 },
+  navNextStrip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#155bb5",
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+  },
+  navNextLabel: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.7)",
+    marginRight: 4,
+  },
+  navNextArrow: {
+    fontSize: 14,
+    color: "#fff",
+    fontWeight: "700",
+    marginRight: 6,
+  },
+  navNextText: { fontSize: 13, color: "#fff", flex: 1 },
+  navNextDist: { fontSize: 12, color: "rgba(255,255,255,0.7)", marginLeft: 8 },
 
-navBannerCard: {
-  flexDirection: "row",
-  alignItems: "center",
-  backgroundColor: "#1A73E8",
-  paddingTop: Platform.OS === "ios" ? 54 : 32,
-  paddingBottom: 14,
-  paddingHorizontal: 16,
-},
-navArrowBox: {
-  width: 52,
-  height: 52,
-  borderRadius: 10,
-  backgroundColor: "rgba(255,255,255,0.18)",
-  justifyContent: "center",
-  alignItems: "center",
-  marginRight: 14,
-},
-navArrowText: {   fontSize: 28,   color: "#fff",   fontWeight: "900" },
-navInstructionBox: { flex: 1 },
-navInstructionText: {
-  fontSize: 18,
-  fontWeight: "700",
-  color: "#fff",
-  lineHeight: 24,
-},
-navInstructionDist: {
-  fontSize: 13,
-  color: "rgba(255,255,255,0.8)",
-  marginTop: 3,
-},
-muteBtn: {
-  width: 38,
-  height: 38,
-  borderRadius: 19,
-  backgroundColor: "rgba(255,255,255,0.18)",
-  justifyContent: "center",
-  alignItems: "center",
-  marginLeft: 10,
-},
-muteBtnText: { fontSize: 20 },
-
-navNextStrip: {
-  flexDirection: "row",
-  alignItems: "center",
-  backgroundColor: "#155bb5",
-  paddingHorizontal: 16,
-  paddingVertical: 9,
-},
-navNextLabel: {
-  fontSize: 12,
-  color: "rgba(255,255,255,0.7)",
-  marginRight: 4,
-},
-navNextArrow: {
-  fontSize: 14,
-  color: "#fff",
-  fontWeight: "700",
-  marginRight: 6,
-},
-navNextText: { fontSize: 13, color: "#fff", flex: 1 },
-navNextDist: {   fontSize: 12, color: "rgba(255,255,255,0.7)", marginLeft: 8 },
-
-  // ── ETA bar (bottom, during navigation) ──
   etaBar: {
     position: "absolute",
     bottom: 0,
@@ -4293,25 +4358,25 @@ navNextDist: {   fontSize: 12, color: "rgba(255,255,255,0.7)", marginLeft: 8 },
     marginLeft: 16,
   },
   etaEndText: { color: "#1A73E8", fontWeight: "700", fontSize: 14 },
-  
+
   navStepsSheet: {
-  position: "absolute",
-  bottom: Platform.OS === "ios" ? 112 : 88,
-  left: 0,
-  right: 0,
-  backgroundColor: "#fff",
-  borderTopLeftRadius: 20,
-  borderTopRightRadius: 20,
-  maxHeight: SCREEN_HEIGHT * 0.35,
-  shadowColor: "#000",
-  shadowOpacity: 0.15,
-  shadowRadius: 12,
-  elevation: 12,
-  paddingHorizontal: 16,
-  paddingTop: 8,
-  overflow: "hidden", // ← clips any content that bleeds outside
-},
-  // ── Re-centre button ──
+    position: "absolute",
+    bottom: Platform.OS === "ios" ? 112 : 88,
+    left: 0,
+    right: 0,
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: SCREEN_HEIGHT * 0.35,
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 12,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    overflow: "hidden",
+  },
+
   recentreBtn: {
     position: "absolute",
     bottom: Platform.OS === "ios" ? 420 : 400,
@@ -4332,7 +4397,6 @@ navNextDist: {   fontSize: 12, color: "rgba(255,255,255,0.7)", marginLeft: 8 },
   },
   recentreBtnIcon: { fontSize: 26, color: "#1A73E8" },
 
-  // ── Bottom sheet ──
   keyboardAvoid: { position: "absolute", bottom: 0, left: 0, right: 0 },
   bottomSheet: {
     backgroundColor: "#fff",
@@ -4347,7 +4411,6 @@ navNextDist: {   fontSize: 12, color: "rgba(255,255,255,0.7)", marginLeft: 8 },
   },
   bottomSheetTall: { maxHeight: 520 },
 
-  // ── Directions panel ──
   loadingRow: { flexDirection: "row", alignItems: "center", padding: 20 },
   loadingTitle: { fontSize: 16, fontWeight: "700", color: "#222" },
   loadingSubtitle: { fontSize: 13, color: "#888", marginTop: 2 },
@@ -4415,31 +4478,31 @@ navNextDist: {   fontSize: 12, color: "rgba(255,255,255,0.7)", marginLeft: 8 },
   modeBtnText: { fontSize: 13, fontWeight: "600", color: "#555" },
   modeBtnTextActive: { color: "#1A73E8" },
 
-stepsList: { maxHeight: 220 },
+  stepsList: { maxHeight: 220 },
   stepRow: {
-  flexDirection: "row",
-  alignItems: "flex-start",
-  paddingVertical: 11,
-  borderBottomWidth: 1,
-  borderBottomColor: "#f0f0f0",
-},
-stepRowActive: { backgroundColor: "#e8f0fe", borderRadius: 10 },
-stepRowDone: { opacity: 0.5 },
-stepBullet: {
-  width: 36,
-  height: 36,
-  borderRadius: 18,
-  backgroundColor: "#f0f0f0",
-  justifyContent: "center",
-  alignItems: "center",
-  marginRight: 12,
-  flexShrink: 0,
-},
-stepBulletActive: { backgroundColor: "#1A73E8" },
-stepBulletDone: { backgroundColor: "#34a853" },
-stepBulletText: { fontSize: 15, color: "#555" },
-stepBulletTextLight: { color: "#fff" },
-stepBody: { flex: 1 },
+    flexDirection: "row",
+    alignItems: "flex-start",
+    paddingVertical: 11,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+  },
+  stepRowActive: { backgroundColor: "#e8f0fe", borderRadius: 10 },
+  stepRowDone: { opacity: 0.5 },
+  stepBullet: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#f0f0f0",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+    flexShrink: 0,
+  },
+  stepBulletActive: { backgroundColor: "#1A73E8" },
+  stepBulletDone: { backgroundColor: "#34a853" },
+  stepBulletText: { fontSize: 15, color: "#555" },
+  stepBulletTextLight: { color: "#fff" },
+  stepBody: { flex: 1 },
   stepInstruction: {
     fontSize: 13,
     fontWeight: "600",
@@ -4456,15 +4519,18 @@ stepBody: { flex: 1 },
     backgroundColor: "#1A73E8",
     alignSelf: "center",
     marginLeft: 8,
-},
+  },
 
-  // ── Bottom nav ──
-  bottomNav: {
-    flexDirection: "row",
-    justifyContent: "space-around",
+  bottomNavScroll: {
     borderTopWidth: 1,
     borderTopColor: "#f0f0f0",
+  },
+  bottomNavContent: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingTop: 10,
+    paddingHorizontal: 4,
+    minWidth: "100%",
   },
   navItem: {
     alignItems: "center",
@@ -4490,7 +4556,6 @@ stepBody: { flex: 1 },
   },
   navBadgeText: { color: "#fff", fontSize: 9, fontWeight: "700" },
 
-  // ── Search ──
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -4532,11 +4597,10 @@ stepBody: { flex: 1 },
     borderBottomWidth: 1,
     borderBottomColor: "#f0f0f0",
   },
- resultIcon: { fontSize: 20, marginRight: 12 },
-resultName: { fontSize: 14, fontWeight: "600", color: "#333" },
-resultDesc: { fontSize: 12, color: "#999", marginTop: 2 },
+  resultIcon: { fontSize: 20, marginRight: 12 },
+  resultName: { fontSize: 14, fontWeight: "600", color: "#333" },
+  resultDesc: { fontSize: 12, color: "#999", marginTop: 2 },
 
-  // ── Buildings list ──
   tabTitle: {
     fontSize: 16,
     fontWeight: "700",
@@ -4570,7 +4634,6 @@ resultDesc: { fontSize: 12, color: "#999", marginTop: 2 },
     textTransform: "capitalize",
   },
 
-  // ── Friends ──
   friendsScroll: { maxHeight: 400 },
   sharingCard: {
     flexDirection: "row",
@@ -4737,7 +4800,6 @@ resultDesc: { fontSize: 12, color: "#999", marginTop: 2 },
     marginBottom: 10,
   },
 
-  // ── Events ──
   eventCard: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -4766,11 +4828,13 @@ resultDesc: { fontSize: 12, color: "#999", marginTop: 2 },
   eventDesc: { fontSize: 12, color: "#aaa", marginTop: 3 },
   dirArrow: { justifyContent: "center", paddingLeft: 8 },
   dirArrowText: { fontSize: 22, color: "#ccc", fontWeight: "300" },
+
   arBtn: {
     backgroundColor: "rgba(255,255,255,0.18)",
-    borderRadius: 8,     paddingHorizontal: 10,
-    paddingVertical: 6,     marginLeft: 8,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginLeft: 8,
   },
   arBtnText: { color: "#fff", fontSize: 12, fontWeight: "800" },
-  
 });
