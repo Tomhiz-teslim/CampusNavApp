@@ -70,6 +70,7 @@ const NIGHT_MAP_STYLE = [
 ];
 
 // ──  UNILAG campus locations ────────────────────────────────────────────────
+ 
 const BUILDINGS = [
   {
     id: 1,
@@ -83,8 +84,8 @@ const BUILDINGS = [
   {
     id: 2,
     name: "Jaja Hostel",
-    latitude: 6.5165,
-    longitude: 3.3887,
+    latitude: 6.516161, // CORRECTED — big one (was 6.5165, 3.3887) — "King Jaja Hall", 957 reviews
+    longitude: 3.3978204,
     icon: "🏠",
     description: "Male hostel — 24 hours",
     category: "hostel",
@@ -101,8 +102,8 @@ const BUILDINGS = [
   {
     id: 4,
     name: "Moremi Hall",
-    latitude: 6.5182,
-    longitude: 3.3894,
+    latitude: 6.5179703, // CORRECTED (was 6.5182, 3.3894) — verified, 2316 reviews
+    longitude: 3.3971292,
     icon: "🏠",
     description: "Female hostel — 24 hours",
     category: "hostel",
@@ -155,8 +156,8 @@ const BUILDINGS = [
   {
     id: 10,
     name: "New Hall",
-    latitude: 6.5192,
-    longitude: 3.3909,
+    latitude: 6.5191717, // CORRECTED (was 6.5192, 3.3909) — verified, 120 reviews
+    longitude: 3.3920229,
     icon: "🏠",
     description: "Mixed hostel — 24 hours",
     category: "hostel",
@@ -191,8 +192,8 @@ const BUILDINGS = [
   {
     id: 14,
     name: "Faculty of Engineering",
-    latitude: 6.5168,
-    longitude: 3.394,
+    latitude: 6.5181305, // CORRECTED (was 6.5168, 3.394) — verified, 366 reviews
+    longitude: 3.3994649,
     icon: "⚙️",
     description: "Engineering & Technology — Mon–Fri 7am–6pm",
     category: "faculty",
@@ -200,8 +201,8 @@ const BUILDINGS = [
   {
     id: 15,
     name: "Faculty of Environmental",
-    latitude: 6.5162,
-    longitude: 3.3933,
+    latitude: 6.5176313, // CORRECTED (was 6.5162, 3.3933) — verified, near main gate
+    longitude: 3.3872911,
     icon: "🌿",
     description: "Environmental Sciences — Mon–Fri 7am–6pm",
     category: "faculty",
@@ -236,8 +237,8 @@ const BUILDINGS = [
   {
     id: 19,
     name: "Faculty of Science",
-    latitude: 6.5176,
-    longitude: 3.3931,
+    latitude: 6.5151215, // CORRECTED (was 6.5176, 3.3931) — verified, 463 reviews
+    longitude: 3.3993455,
     icon: "🔬",
     description: "Pure & Applied Sciences — Mon–Fri 7am–6pm",
     category: "faculty",
@@ -245,10 +246,10 @@ const BUILDINGS = [
   {
     id: 20,
     name: "Faculty of Social Sciences",
-    latitude: 6.5158,
-    longitude: 3.3917,
+    latitude: 6.5158892, // CORRECTED slightly (was 6.5158, 3.3917) — verified, 22 reviews
+    longitude: 3.391666,
     icon: "📊",
-    description: "Social Sciences — Mon–Fri 7am–6pm",
+    description: "Social Sciences — Mon–Fri 8am–4pm",
     category: "faculty",
   },
   {
@@ -281,8 +282,8 @@ const BUILDINGS = [
   {
     id: 24,
     name: "Postgraduate School",
-    latitude: 6.5164,
-    longitude: 3.3908,
+    latitude: 6.5165873, // CORRECTED (was 6.5164, 3.3908) — verified, 277 reviews
+    longitude: 3.3864962,
     icon: "🏫",
     description: "Postgraduate studies — Mon–Fri 8am–5pm",
     category: "faculty",
@@ -299,8 +300,8 @@ const BUILDINGS = [
   {
     id: 26,
     name: "Senate Building",
-    latitude: 6.51722,
-    longitude: 3.39028,
+    latitude: 6.519411, // CORRECTED (was 6.51722, 3.39028) — verified, 432 reviews
+    longitude: 3.3989516,
     icon: "🏛️",
     description: "University admin — Mon–Fri 8am–5pm",
     category: "admin",
@@ -389,7 +390,7 @@ const BUILDINGS = [
   {
     id: 36,
     name: "Security Post (Main Gate)",
-    latitude: 6.5176848,
+    latitude: 6.5176848, // verified — matches "UNILAG Gate House" pin closely
     longitude: 3.3854527,
     icon: "🚪",
     description: "Main entrance security — 24 hours",
@@ -434,8 +435,8 @@ const BUILDINGS = [
   {
     id: 65,
     name: "UNILAG Mosque",
-    latitude: 6.5177,
-    longitude: 3.3907,
+    latitude: 6.5191731, // CORRECTED (was 6.5177, 3.3907) — "Unilag Islamic Centre", 356 reviews
+    longitude: 3.3902119,
     icon: "🕌",
     description: "Central Mosque — Daily prayer times",
     category: "admin",
@@ -443,10 +444,10 @@ const BUILDINGS = [
   {
     id: 66,
     name: "UNILAG Bookshop",
-    latitude: 6.51695,
-    longitude: 3.3911,
+    latitude: 6.5186974, // CORRECTED (was 6.51695, 3.3911) — verified, 1243 reviews
+    longitude: 3.397515,
     icon: "📗",
-    description: "University Bookshop — Mon–Sat 8am–6pm",
+    description: "University Bookshop — Mon–Sat 8am–5pm",
     category: "admin",
   },
   {
@@ -551,8 +552,8 @@ const BUILDINGS = [
   {
     id: 48,
     name: "Main Library",
-    latitude: 6.5168,
-    longitude: 3.3915,
+    latitude: 6.5200958, // CORRECTED (was 6.5168, 3.3915) — verified pin, 116 reviews
+    longitude: 3.3999487,
     icon: "📚",
     description: "Central Library — Mon–Sat 8am–10pm",
     category: "library",
@@ -596,10 +597,10 @@ const BUILDINGS = [
   {
     id: 53,
     name: "University Health Centre",
-    latitude: 6.516,
-    longitude: 3.3905,
+    latitude: 6.5141311, // CORRECTED (was 6.516, 3.3905) — verified, "Unilag Medical Centre"
+    longitude: 3.3966745,
     icon: "🏥",
-    description: "Medical services — Mon–Fri 8am–6pm",
+    description: "Medical services — 24 hours",
     category: "medical",
   },
   {
@@ -641,19 +642,19 @@ const BUILDINGS = [
   {
     id: 58,
     name: "Sport Centre",
-    latitude: 6.5185,
-    longitude: 3.392,
+    latitude: 6.5166212, // CORRECTED (was 6.5185, 3.392) — verified, 3886 reviews
+    longitude: 3.3865737,
     icon: "⚽",
-    description: "Sports & recreation — Mon–Sat 6am–9pm",
+    description: "Sports & recreation — 24 hours",
     category: "sport",
   },
   {
     id: 59,
     name: "Swimming Pool",
-    latitude: 6.5186,
-    longitude: 3.3923,
+    latitude: 6.5171424, // CORRECTED (was 6.5186, 3.3923) — verified, 55 reviews
+    longitude: 3.3901188,
     icon: "🏊",
-    description: "Olympic pool — Mon–Sat 7am–7pm",
+    description: "Olympic pool — Mon–Sun 8am–5pm",
     category: "sport",
   },
   {
@@ -691,6 +692,229 @@ const BUILDINGS = [
     icon: "🏋️",
     description: "Indoor sports — Mon–Sat 6am–9pm",
     category: "sport",
+  },
+ 
+  // ── NEW: added from verified Google Places data ──────────────────────────
+  {
+    id: 71,
+    name: "J.F. Ade Ajayi Auditorium",
+    latitude: 6.5192375,
+    longitude: 3.3994188,
+    icon: "🎭",
+    description: "Main Auditorium — Mon–Fri 8am–4pm",
+    category: "admin",
+  },
+  {
+    id: 72,
+    name: "Faculty of Architecture",
+    latitude: 6.5186306,
+    longitude: 3.3998855,
+    icon: "📐",
+    description: "Architecture — Mon–Fri 7am–6pm",
+    category: "faculty",
+  },
+  {
+    id: 73,
+    name: "UNILAG Indoor Sports Complex",
+    latitude: 6.5164975,
+    longitude: 3.3881864,
+    icon: "🏐",
+    description: "Indoor courts (basketball, badminton) — daily",
+    category: "sport",
+  },
+  {
+    id: 74,
+    name: "Distance Learning Institute (DLI)",
+    latitude: 6.5119483,
+    longitude: 3.3921009,
+    icon: "🎓",
+    description: "Distance & part-time learning — Mon–Sat 7:30am–5pm",
+    category: "faculty",
+  },
+  {
+    id: 75,
+    name: "Unilag Consult",
+    latitude: 6.5128297,
+    longitude: 3.390790,
+    icon: "🏢",
+    description: "Consultancy services arm — Mon–Fri 8am–5pm",
+    category: "admin",
+  },
+  {
+    id: 76,
+    name: "El Kanemi Hall",
+    latitude: 6.5160016,
+    longitude: 3.3844395,
+    icon: "🏠",
+    description: "Private hostel — 24 hours",
+    category: "hostel",
+  },
+  {
+    id: 77,
+    name: "Sodeinde Hostel",
+    latitude: 6.519302,
+    longitude: 3.3930548,
+    icon: "🏠",
+    description: "Hostel (New Hall area) — 24 hours",
+    category: "hostel",
+  },
+  {
+    id: 78,
+    name: "Fagunwa Female Hostel",
+    latitude: 6.5199632,
+    longitude: 3.3919108,
+    icon: "🏠",
+    description: "Female hostel (New Hall area) — 24 hours",
+    category: "hostel",
+  },
+  {
+    id: 79,
+    name: "Henry Carr Postgraduate Hall",
+    latitude: 6.5161325,
+    longitude: 3.3872541,
+    icon: "🏠",
+    description: "Postgraduate hall of residence — 24 hours",
+    category: "hostel",
+  },
+  {
+    id: 80,
+    name: "Testimony Hostels",
+    latitude: 6.5172746,
+    longitude: 3.383264,
+    icon: "🏠",
+    description: "Private hostel — 24 hours",
+    category: "hostel",
+  },
+  {
+    id: 81,
+    name: "ULWS Female Hostel",
+    latitude: 6.5107807,
+    longitude: 3.393099,
+    icon: "🏠",
+    description: "Unilag Women Society private female hostel — 24 hours",
+    category: "hostel",
+  },
+  {
+    id: 82,
+    name: "UNILAG Consult Female Hostel",
+    latitude: 6.5225233,
+    longitude: 3.3816939,
+    icon: "🏠",
+    description: "Private female hostel — 24 hours",
+    category: "hostel",
+  },
+  {
+    id: 83,
+    name: "Salado Cafeteria",
+    latitude: 6.5176681,
+    longitude: 3.3896141,
+    icon: "🍽️",
+    description: "Cafeteria & salad bar — Mon–Sat 8am–10pm",
+    category: "food",
+  },
+  {
+    id: 84,
+    name: "Iya Moria",
+    latitude: 6.5117184,
+    longitude: 3.3926799,
+    icon: "🍲",
+    description: "Amala & local dishes — Mon–Sat 10am–10pm",
+    category: "food",
+  },
+  {
+    id: 85,
+    name: "Korede Spaghetti",
+    latitude: 6.5149816,
+    longitude: 3.3864743,
+    icon: "🍝",
+    description: "Spaghetti & rice spot — Daily 12pm–10pm",
+    category: "food",
+  },
+  {
+    id: 86,
+    name: "Chillspot",
+    latitude: 6.5162867,
+    longitude: 3.3877647,
+    icon: "🥪",
+    description: "Shawarma & quick eats — Mon–Sat 9am–9pm",
+    category: "food",
+  },
+ 
+  // ── NEW (round 2): banks, shops, an extra hostel ──────────────────────────
+  // Note: "bank"/"shop" aren't existing categories in your CATEGORY_COLORS /
+  // CATEGORY_ICONS / CATEGORIES list — these default to "admin" styling for
+  // now. Add a dedicated category later if you want them visually distinct.
+  {
+    id: 87,
+    name: "Wema Bank (UNILAG Branch)",
+    latitude: 6.5171425,
+    longitude: 3.3868729,
+    icon: "🏦",
+    description: "Bank branch — Mon–Fri 8am–4pm",
+    category: "admin",
+  },
+  {
+    id: 88,
+    name: "Unilag Microfinance Bank",
+    latitude: 6.5185975,
+    longitude: 3.3944026,
+    icon: "🏦",
+    description: "Bank branch — Mon–Fri 8am–4pm",
+    category: "admin",
+  },
+  {
+    id: 89,
+    name: "Unilag Pharmacy",
+    latitude: 6.5185505,
+    longitude: 3.3945179,
+    icon: "💊",
+    description: "Pharmacy & groceries — Mon–Sat 7am–9pm",
+    category: "medical",
+  },
+  {
+    id: 90,
+    name: "Yem-Yem Supermarket",
+    latitude: 6.5185065,
+    longitude: 3.3926534,
+    icon: "🛒",
+    description: "Supermarket — Mon–Sat 8am–9pm, Sun 12–9pm",
+    category: "admin",
+  },
+  {
+    id: 91,
+    name: "UNILAG Shopping Complex",
+    latitude: 6.5188981,
+    longitude: 3.3923655,
+    icon: "🏬",
+    description: "Shops, salons, business centre — daily 8am–9pm",
+    category: "admin",
+  },
+  {
+    id: 92,
+    name: "Unilag Water Factory",
+    latitude: 6.5193853,
+    longitude: 3.3918431,
+    icon: "💧",
+    description: "Bottled/sachet water plant — Mon–Sat 8am–5pm",
+    category: "admin",
+  },
+  {
+    id: 93,
+    name: "Madam Tinubu Hall",
+    latitude: 6.5203251,
+    longitude: 3.3916567,
+    icon: "🏠",
+    description: "Female hostel (New Hall area) — 24 hours",
+    category: "hostel",
+  },
+  {
+    id: 94,
+    name: "Unilag Press",
+    latitude: 6.5177514,
+    longitude: 3.3914689,
+    icon: "🖨️",
+    description: "University press office — Mon–Fri 8am–4pm",
+    category: "admin",
   },
 ];
 
