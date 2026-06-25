@@ -1775,7 +1775,9 @@ function speakInstruction(text: string, muted: boolean) {
         <Text style={styles.sectionLabel}>
           🟢 My Friends ({friends.length})
         </Text>
-        {friends.length === 0 ? (
+        {!friendsLoaded ? (
+          <TabSkeleton rows={3} />
+        ) : friends.length === 0 ? (
           <Text style={styles.emptyText}>
             No friends yet. Search by username above!
           </Text>
@@ -1902,7 +1904,9 @@ function speakInstruction(text: string, muted: boolean) {
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
         >
-          {events.length === 0 ? (
+          {!eventsLoaded ? (
+            <TabSkeleton rows={3} />
+          ) : events.length === 0 ? (
             <Text style={styles.emptyText}>
               No events yet. Check back soon!
             </Text>
@@ -2141,7 +2145,7 @@ function speakInstruction(text: string, muted: boolean) {
             📍 All Locations (
             {communityLoaded
               ? BUILDINGS.length + communityLocations.length
-              : `${BUILDINGS.length}…`}
+              : BUILDINGS.length}
             )
           </Text>
           <ScrollView
@@ -2205,26 +2209,12 @@ function speakInstruction(text: string, muted: boolean) {
 
         {/* FRIENDS TAB */}
         <View style={{ display: activeTab === "friends" ? "flex" : "none" }}>
-          {!friendsLoaded ? (
-            <>
-              <Text style={styles.tabTitle}>👥 Friends</Text>
-              <TabSkeleton rows={4} />
-            </>
-          ) : (
-            renderFriendsTab()
-          )}
+          {renderFriendsTab()}
         </View>
 
         {/* EVENTS TAB */}
         <View style={{ display: activeTab === "events" ? "flex" : "none" }}>
-          {!eventsLoaded ? (
-            <>
-              <Text style={styles.tabTitle}>🗓️ Campus Events</Text>
-              <TabSkeleton rows={3} />
-            </>
-          ) : (
-            renderEventsTab()
-          )}
+          {renderEventsTab()}
         </View>
         {/* SERVICES TAB */}
         <View style={{ display: activeTab === "services" ? "flex" : "none", flex: 1 }}>
@@ -2706,7 +2696,7 @@ function speakInstruction(text: string, muted: boolean) {
                 ))}
                 <TouchableOpacity
                   style={styles.navItem}
-                  onPress={() => router.push("/account")}
+                  onPress={() => router.push("../account")}
                 >
                   <Text style={styles.navIcon}>👤</Text>
                   <Text style={styles.navLabel}>Account</Text>
