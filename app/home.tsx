@@ -56,6 +56,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 // ── Marker components ─────────────────────────────────────────────────────────
 
 const CATEGORIES = [
+  "all",
   "faculty",
   "hostel",
   "admin",
