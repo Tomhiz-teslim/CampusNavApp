@@ -25,6 +25,7 @@ import {
   View,
 } from "react-native";
 import { auth, database } from "../lib/firebase";
+import ServicesTab from "../components/services";
 
 // ── Hardcoded campus buildings (same as map screen) ──────────────────────────
 const BUILDINGS = [
@@ -2051,6 +2052,8 @@ function UserAccount() {
   const [form, setForm] = useState({
     fullName: "", faculty: "", matricNo: "", phone: "",
   });
+  const [showServices, setShowServices] = useState(false);
+  const [infoPanel, setInfoPanel] = useState<{ title: string; icon: string; body: string } | null>(null);
 
   const FACULTIES = [
     "Engineering", "Science", "Arts", "Law", "Education",
@@ -2109,11 +2112,73 @@ function UserAccount() {
     ? userData.fullName.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase()
     : "U";
 
-  const CAMPUS_TOOLS = [
+  const CAMPUS_TOOLS: {
+    icon: string; label: string; sub: string;
+    route?: string; action?: () => void;
+    info?: { title: string; icon: string; body: string };
+  }[] = [
     { icon: "📍", label: "Submit a Location", sub: "Add a new campus spot to the map", route: "/submit-location" },
     { icon: "🗓️", label: "Events",            sub: "Browse upcoming campus events",    route: "/events" },
     { icon: "🍽️", label: "Find a Cafeteria",  sub: "Locate food spots near you",       route: "/cafeteria" },
     { icon: "🚌", label: "Shuttle Routes",    sub: "Schedules, stops & directions",    route: "/shuttle" },
+  ];
+
+  // Moved here from the Home screen's old "Services" tab, plus the
+  // additional account-level items requested for this section. Items
+  // with a `route` navigate to an existing screen; items with `info`
+  // open a lightweight in-app panel (there's no dedicated screen/data
+  // source for these yet — see the handover notes).
+  const FEATURES: {
+    icon: string; label: string; sub: string;
+    route?: string; action?: () => void;
+    info?: { title: string; icon: string; body: string };
+  }[] = [
+    {
+      icon: "🛍️", label: "Campus Services", sub: "Directory of services around campus",
+      action: () => setShowServices(true),
+    },
+    {
+      icon: "🚨", label: "Emergency Contacts", sub: "Security, health centre & wardens",
+      info: {
+        title: "Emergency Contacts", icon: "🚨",
+        body: "Add your campus's real emergency numbers here (security post, health centre, hall wardens). This panel is a placeholder — wire it up to a Firebase node (e.g. `emergencyContacts`) so admins can update numbers without an app update.",
+      },
+    },
+    {
+      icon: "🔎", label: "Lost & Found", sub: "Report or search for lost items",
+      info: {
+        title: "Lost & Found", icon: "🔎",
+        body: "This feature doesn't have a backend yet. A simple version can reuse the same pattern as Submit a Location: a `lostAndFound` node in the database, a submission form, and a browsable list.",
+      },
+    },
+    {
+      icon: "📖", label: "Campus Directory", sub: "Departments, offices & contacts",
+      info: {
+        title: "Campus Directory", icon: "📖",
+        body: "Placeholder for a searchable list of departments/offices. Can reuse the BUILDINGS data already in the app, extended with phone/email fields.",
+      },
+    },
+    {
+      icon: "💬", label: "Help & Support", sub: "Get help using Compass",
+      info: {
+        title: "Help & Support", icon: "💬",
+        body: "Reach the Compass team for help with your account, a bug, or a suggestion. Replace this with a real support email/WhatsApp link before release.",
+      },
+    },
+    {
+      icon: "ℹ️", label: "About Compass", sub: "App info & version",
+      info: {
+        title: "About Compass", icon: "ℹ️",
+        body: "UNILAG Navigator (Compass) — campus navigation, events, and community-contributed locations. Built by Even Tech.",
+      },
+    },
+    {
+      icon: "⚙️", label: "Settings", sub: "Notifications & privacy",
+      info: {
+        title: "Settings", icon: "⚙️",
+        body: "Location-sharing with friends can already be toggled from the Friends tab on Home. A dedicated Settings screen (notification preferences, account deletion, etc.) is a good next addition here.",
+      },
+    },
   ];
 
   return (
@@ -2220,15 +2285,21 @@ function UserAccount() {
         </View>
       )}
 
-      {/* ── CAMPUS TOOLS (unchanged) ── */}
+      {/* ── CAMPUS TOOLS (merged with the old Features section below — ── */}
+      {/* one header, one continuous list). CAMPUS_TOOLS items only ever */}
+      {/* carry a `route`, so the shared onPress logic below still works. */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>CAMPUS TOOLS</Text>
-        {CAMPUS_TOOLS.map(item => (
+        {[...CAMPUS_TOOLS, ...FEATURES].map(item => (
           <TouchableOpacity
             key={item.label}
             style={styles.featureRow}
-            onPress={() => router.push(item.route as any)}
             activeOpacity={0.7}
+            onPress={() => {
+              if (item.route) router.push(item.route as any);
+              else if (item.action) item.action();
+              else if (item.info) setInfoPanel(item.info);
+            }}
           >
             <View style={styles.featureIconWrap}>
               <Text style={styles.featureIcon}>{item.icon}</Text>
@@ -2246,6 +2317,33 @@ function UserAccount() {
       <TouchableOpacity style={styles.signOutFullBtn} onPress={handleSignOut}>
         <Text style={styles.signOutFullText}>Sign Out</Text>
       </TouchableOpacity>
+
+      {/* Campus Services — full component, moved here from Home */}
+      <Modal visible={showServices} animationType="slide" onRequestClose={() => setShowServices(false)}>
+        <View style={{ flex: 1, backgroundColor: "#fff" }}>
+          <View style={styles.servicesModalHeader}>
+            <Text style={styles.servicesModalHeaderTitle}>Campus Services</Text>
+            <TouchableOpacity onPress={() => setShowServices(false)} style={styles.servicesModalCloseBtn}>
+              <Text style={styles.servicesModalCloseText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <ServicesTab userId={user?.uid ?? ""} userName={userData?.fullName ?? ""} />
+        </View>
+      </Modal>
+
+      {/* Simple info panel for the placeholder Features items */}
+      <Modal visible={!!infoPanel} transparent animationType="fade" onRequestClose={() => setInfoPanel(null)}>
+        <View style={styles.infoOverlay}>
+          <View style={styles.infoCard}>
+            <Text style={styles.infoIcon}>{infoPanel?.icon}</Text>
+            <Text style={styles.infoTitle}>{infoPanel?.title}</Text>
+            <Text style={styles.infoBody}>{infoPanel?.body}</Text>
+            <TouchableOpacity style={styles.infoCloseBtn} onPress={() => setInfoPanel(null)}>
+              <Text style={styles.infoCloseText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
     </ScrollView>
   );
@@ -2703,6 +2801,33 @@ const styles = StyleSheet.create({
   featureLabel: { fontSize: 15, color: "#222", fontWeight: "600" },
   featureSub: { fontSize: 12, color: "#aaa", marginTop: 2 },
   featureArrow: { fontSize: 20, color: "#ccc", marginLeft: 8 },
+
+  servicesModalHeader: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingTop: 55, paddingHorizontal: 16, paddingBottom: 14,
+    backgroundColor: "#1a5c38",
+  },
+  servicesModalHeaderTitle: { color: "#fff", fontSize: 18, fontWeight: "bold" },
+  servicesModalCloseBtn: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center", justifyContent: "center",
+  },
+  servicesModalCloseText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+
+  infoOverlay: {
+    flex: 1, backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center", alignItems: "center", paddingHorizontal: 28,
+  },
+  infoCard: {
+    backgroundColor: "#fff", borderRadius: 18, padding: 24, width: "100%",
+    alignItems: "center",
+  },
+  infoIcon: { fontSize: 34, marginBottom: 10 },
+  infoTitle: { fontSize: 17, fontWeight: "700", color: "#1a1a1a", marginBottom: 8, textAlign: "center" },
+  infoBody: { fontSize: 13, color: "#666", lineHeight: 19, textAlign: "center", marginBottom: 18 },
+  infoCloseBtn: { backgroundColor: "#1a5c38", borderRadius: 10, paddingVertical: 11, paddingHorizontal: 28 },
+  infoCloseText: { color: "#fff", fontSize: 14, fontWeight: "700" },
 
   signOutFullBtn: {
     margin: 16,

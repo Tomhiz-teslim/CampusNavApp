@@ -1,3 +1,11 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import Constants from "expo-constants";
+import * as Haptics from "expo-haptics";
+import * as Location from "expo-location";
+import { router, useLocalSearchParams } from "expo-router";
+import * as Speech from "expo-speech";
+import { signOut } from "firebase/auth";
+import { get, onValue, ref, remove, set, update } from "firebase/database";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -8,6 +16,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Share,
   StyleSheet,
   Switch,
   Text,
@@ -15,48 +24,38 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
-import * as Location from "expo-location";
-import { router, useLocalSearchParams } from "expo-router";
-import * as Speech from "expo-speech";
-import { signOut } from "firebase/auth";
-import { get, onValue, ref, remove, set, update } from "firebase/database";
+import MapView from "react-native-map-clustering";
+import { Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
+import CompassPointer from "../components/CompassPointer";
+import {
+  BuildingMarker,
+  FriendMarker,
+  mStyles,
+} from "../components/mapMarkers";
+import { SelectedLocationCard } from "../components/SelectedLocationCard";
+import { TabSkeleton } from "../components/tabSkele";
+import { BUILDINGS, CAMPUS_BOUNDS, CATEGORY_COLORS } from "../lib/campusData";
 import { DirectionsResult, fetchDirections } from "../lib/directions";
 import { auth, database } from "../lib/firebase";
-import { StyledModal, useStyledModal } from "./StyledModal";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Share } from "react-native";
-import * as Haptics from "expo-haptics";
-import ARNavigation from "../components/ARNavigation";
-import CompassPointer from "../components/CompassPointer";
-import ServicesTab from "../components/services"; // adjust path
-import { BUILDINGS, CATEGORY_COLORS, CAMPUS_BOUNDS } from "../lib/campusData";
 import {
-  KalmanState,
-  hasPassedWaypoint,
-  snapToRoute,
-  kalmanFilter,
-  haversineMetres,
   distanceToPolylineMetres,
-  stripHtml,
   getDirectionLabel,
+  hasPassedWaypoint,
+  haversineMetres,
+  kalmanFilter,
+  KalmanState,
+  snapToRoute,
+  stripHtml,
 } from "../lib/navUtils";
-import { BuildingMarker, FriendMarker, mStyles } from "../components/mapMarkers";
-import { TabSkeleton } from "../components/tabSkele";
-import { SelectedLocationCard } from "../components/SelectedLocationCard";
+import { StyledModal, useStyledModal } from "./StyledModal";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-
-
 // ── Selected Location Card ────────────────────────────────────────────────────
-
 
 // ── Marker components ─────────────────────────────────────────────────────────
 
-
 const CATEGORIES = [
-  "all",
   "faculty",
   "hostel",
   "admin",
@@ -75,6 +74,67 @@ const CATEGORY_ICONS: Record<string, string> = {
   medical: "🏥",
   sport: "⚽",
 };
+
+// ── AR gate ──────────────────────────────────────────────────────────────────
+// AR features almost always depend on native camera/motion modules that
+// Expo Go's fixed runtime doesn't include (it only ships the native modules
+// Expo bundled at build time). A plain top-level `import ARNavigation from
+// "../components/ARNavigation"` gets evaluated the instant this file loads —
+// i.e. right after every login — so if that component references an
+// unsupported native module, it can crash the whole app before AR mode is
+// ever toggled on. Routing it through `require()` inside this gate means
+// Expo Go never touches that module at all; a standalone/dev-client build
+// (Constants.appOwnership !== "expo") still gets the real thing.
+const isExpoGo = Constants.appOwnership === "expo";
+
+function ARNavigationGate(props: any) {
+  if (isExpoGo) {
+    return (
+      <View style={arGateStyles.wrap}>
+        <Text style={arGateStyles.title}>
+          AR mode isn't available in Expo Go
+        </Text>
+        <Text style={arGateStyles.body}>
+          Run this from a development or standalone build to use AR navigation.
+        </Text>
+        <TouchableOpacity style={arGateStyles.btn} onPress={props.onExit}>
+          <Text style={arGateStyles.btnText}>Back to map</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+  const ARNavigation = require("../components/ARNavigation").default;
+  return <ARNavigation {...props} />;
+}
+
+const arGateStyles = StyleSheet.create({
+  wrap: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.9)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 32,
+  },
+  title: {
+    color: "#fff",
+    fontSize: 17,
+    fontWeight: "700",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  body: { color: "#ccc", fontSize: 13, textAlign: "center", marginBottom: 20 },
+  btn: {
+    backgroundColor: "#1a5c38",
+    borderRadius: 10,
+    paddingVertical: 11,
+    paddingHorizontal: 24,
+  },
+  btnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
+});
 
 const REROUTE_THRESHOLD_M = 25;
 const ARRIVAL_THRESHOLD_M = 18;
@@ -105,7 +165,9 @@ export default function HomeScreen() {
     latitude: number;
     longitude: number;
   } | null>(null);
-  const interpolationFrameRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const interpolationFrameRef = useRef<ReturnType<typeof setInterval> | null>(
+    null,
+  );
   const [travelMode, setTravelMode] = useState<"walking" | "driving">(
     "walking",
   );
@@ -146,11 +208,7 @@ export default function HomeScreen() {
   >({});
   const [sharingLocation, setSharingLocation] = useState(true);
 
-  const {
-    config: modal,
-    confirm,
-    alert: showAlert,
-  } = useStyledModal();
+  const { config: modal, confirm, alert: showAlert } = useStyledModal();
 
   const params = useLocalSearchParams<{
     eventLat?: string;
@@ -187,64 +245,64 @@ export default function HomeScreen() {
     longitude: number;
   } | null>(null);
 
-const selectedVoiceRef = useRef<string | undefined>(undefined);
+  const selectedVoiceRef = useRef<string | undefined>(undefined);
 
-useEffect(() => {
-  async function pickBestVoice() {
-    const voices = await Speech.getAvailableVoicesAsync();
-    
-    // Priority list — first match wins
-    const preferred = [
-      "com.apple.ttsbundle.Samantha-premium",
-      "com.apple.ttsbundle.siri_female_en-US_compact",
-      "com.apple.ttsbundle.Karen-premium",
-      "com.apple.ttsbundle.Daniel-premium",
-      "com.apple.voice.compact.en-US.Samantha",
-      "en-us-x-sfg#female_1-local",
-      "en-us-x-tpc-local",
-      "en-au-x-aud#female_1-local",
-    ];
+  useEffect(() => {
+    async function pickBestVoice() {
+      const voices = await Speech.getAvailableVoicesAsync();
 
-    for (const id of preferred) {
-      if (voices.find((v) => v.identifier === id)) {
-        selectedVoiceRef.current = id;
+      // Priority list — first match wins
+      const preferred = [
+        "com.apple.ttsbundle.Samantha-premium",
+        "com.apple.ttsbundle.siri_female_en-US_compact",
+        "com.apple.ttsbundle.Karen-premium",
+        "com.apple.ttsbundle.Daniel-premium",
+        "com.apple.voice.compact.en-US.Samantha",
+        "en-us-x-sfg#female_1-local",
+        "en-us-x-tpc-local",
+        "en-au-x-aud#female_1-local",
+      ];
+
+      for (const id of preferred) {
+        if (voices.find((v) => v.identifier === id)) {
+          selectedVoiceRef.current = id;
+          return;
+        }
+      }
+
+      // Fallback: any premium/enhanced en-US female voice
+      const premiumUS = voices.find(
+        (v) =>
+          v.language?.startsWith("en") &&
+          (v.quality === Speech.VoiceQuality.Enhanced ||
+            v.identifier?.includes("premium")),
+      );
+      if (premiumUS) {
+        selectedVoiceRef.current = premiumUS.identifier;
         return;
       }
+
+      // Last resort: any English voice
+      const anyEnglish = voices.find((v) => v.language?.startsWith("en"));
+      if (anyEnglish) selectedVoiceRef.current = anyEnglish.identifier;
     }
 
-    // Fallback: any premium/enhanced en-US female voice
-    const premiumUS = voices.find(
-      (v) =>
-        v.language?.startsWith("en") &&
-        (v.quality === Speech.VoiceQuality.Enhanced ||
-          v.identifier?.includes("premium"))
-    );
-    if (premiumUS) {
-      selectedVoiceRef.current = premiumUS.identifier;
-      return;
-    }
+    pickBestVoice();
+  }, []);
 
-    // Last resort: any English voice
-    const anyEnglish = voices.find((v) => v.language?.startsWith("en"));
-    if (anyEnglish) selectedVoiceRef.current = anyEnglish.identifier;
+  function speakInstruction(text: string, muted: boolean) {
+    if (muted) return;
+    if (speakTimeoutRef.current) clearTimeout(speakTimeoutRef.current);
+    speakTimeoutRef.current = setTimeout(() => {
+      Speech.stop();
+      Speech.speak(stripHtml(text), {
+        language: "en-US",
+        rate: 0.88,
+        pitch: 1.05,
+        voice: selectedVoiceRef.current,
+      });
+    }, 300);
   }
-
-  pickBestVoice();
-}, []);
-
-function speakInstruction(text: string, muted: boolean) {
-  if (muted) return;
-  if (speakTimeoutRef.current) clearTimeout(speakTimeoutRef.current);
-  speakTimeoutRef.current = setTimeout(() => {
-    Speech.stop();
-    Speech.speak(stripHtml(text), {
-      language: "en-US",
-      rate: 0.88,
-      pitch: 1.05,
-      voice: selectedVoiceRef.current,
-    });
-  }, 300);
-}
 
   useEffect(() => {
     directionsRef.current = directions;
@@ -266,7 +324,8 @@ function speakInstruction(text: string, muted: boolean) {
   // Each tick lerps displayUserLocation 25% of the way toward the real
   // GPS userLocation. This gives a smooth "glide" instead of teleport jumps.
   useEffect(() => {
-    if (interpolationFrameRef.current) clearInterval(interpolationFrameRef.current);
+    if (interpolationFrameRef.current)
+      clearInterval(interpolationFrameRef.current);
 
     interpolationFrameRef.current = setInterval(() => {
       const target = userLocationRef.current;
@@ -276,16 +335,20 @@ function speakInstruction(text: string, muted: boolean) {
         if (!prev) return target;
         const LERP = navigatingRef.current ? 0.25 : 0.4; // faster when navigating
         const newLat = prev.latitude + LERP * (target.latitude - prev.latitude);
-        const newLng = prev.longitude + LERP * (target.longitude - prev.longitude);
+        const newLng =
+          prev.longitude + LERP * (target.longitude - prev.longitude);
         // Stop updating when within 0.00001 deg (~1m) to avoid infinite micro-updates
-        const delta = Math.abs(newLat - target.latitude) + Math.abs(newLng - target.longitude);
+        const delta =
+          Math.abs(newLat - target.latitude) +
+          Math.abs(newLng - target.longitude);
         if (delta < 0.000005) return target;
         return { latitude: newLat, longitude: newLng };
       });
     }, 33); // ~30 fps
 
     return () => {
-      if (interpolationFrameRef.current) clearInterval(interpolationFrameRef.current);
+      if (interpolationFrameRef.current)
+        clearInterval(interpolationFrameRef.current);
     };
   }, []); // runs once; reads navigatingRef live via ref
 
@@ -306,7 +369,7 @@ function speakInstruction(text: string, muted: boolean) {
   useEffect(() => {
     if (!navigating || !followUser || !userLocation) return;
     const now = Date.now();
-    if (now - lastCameraUpdateRef.current < 300) return;   // was 800ms
+    if (now - lastCameraUpdateRef.current < 300) return; // was 800ms
     lastCameraUpdateRef.current = now;
 
     const avgSpeed =
@@ -419,7 +482,6 @@ function speakInstruction(text: string, muted: boolean) {
     }
   }, [directions, loadingDirs]);
 
-
   useEffect(() => {
     const dbUnsubscribers: (() => void)[] = [];
     const friendUnsubscribers: (() => void)[] = [];
@@ -480,7 +542,7 @@ function speakInstruction(text: string, muted: boolean) {
             const accuracyLimit = navigatingRef.current ? 180 : 120;
             const now = Date.now();
             const timeSinceLast = now - lastLocationTimestampRef.current;
-            const forceAccept = navigatingRef.current && timeSinceLast > 2000;  // was 3000
+            const forceAccept = navigatingRef.current && timeSinceLast > 2000; // was 3000
             if (accuracy > accuracyLimit && !forceAccept) return;
             lastLocationTimestampRef.current = now;
             kalmanRef.current = kalmanFilter(
@@ -679,7 +741,8 @@ function speakInstruction(text: string, muted: boolean) {
       Speech.stop();
       if (speakTimeoutRef.current) clearTimeout(speakTimeoutRef.current);
       // CHANGE 9: Clean up interpolation loop
-      if (interpolationFrameRef.current) clearInterval(interpolationFrameRef.current);
+      if (interpolationFrameRef.current)
+        clearInterval(interpolationFrameRef.current);
     };
   }, []);
 
@@ -725,7 +788,7 @@ function speakInstruction(text: string, muted: boolean) {
         speed,
       );
       const distFromRoute = distanceToPolylineMetres(pos, dirs.polylinePoints);
-      const displayPos = snapped ?? pos;   // real GPS when snapped is null
+      const displayPos = snapped ?? pos; // real GPS when snapped is null
       const navPos = displayPos;
 
       // ── NEW: update distance state for CompassPointer ──
@@ -927,7 +990,7 @@ function speakInstruction(text: string, muted: boolean) {
 
       // CHANGE 10: distFromRoute already computed above after snap decision.
       // Re-use it here instead of calling distanceToPolylineMetres twice.
-      const distToRoute = distFromRoute;   // removed duplicate computation
+      const distToRoute = distFromRoute; // removed duplicate computation
       const now = Date.now();
 
       // CHANGE 10: Debug logging — only in __DEV__ builds so it doesn't
@@ -936,11 +999,11 @@ function speakInstruction(text: string, muted: boolean) {
       if (__DEV__) {
         console.log(
           `[NAV] raw=(${pos.latitude.toFixed(6)},${pos.longitude.toFixed(6)})` +
-          ` filtered=(same as pos — Kalman runs in watchPosition callback)` +
-          ` snapped=${snapped ? `(${snapped.latitude.toFixed(6)},${snapped.longitude.toFixed(6)})` : 'NULL(using raw)'}` +
-          ` distFromRoute=${distToRoute.toFixed(1)}m` +
-          ` distToDest=${distToDest.toFixed(1)}m` +
-          ` speed=${speed.toFixed(2)}m/s`
+            ` filtered=(same as pos — Kalman runs in watchPosition callback)` +
+            ` snapped=${snapped ? `(${snapped.latitude.toFixed(6)},${snapped.longitude.toFixed(6)})` : "NULL(using raw)"}` +
+            ` distFromRoute=${distToRoute.toFixed(1)}m` +
+            ` distToDest=${distToDest.toFixed(1)}m` +
+            ` speed=${speed.toFixed(2)}m/s`,
         );
       }
       const cooldown = Math.min(
@@ -975,7 +1038,6 @@ function speakInstruction(text: string, muted: boolean) {
                 : "Route updated.";
           speakInstruction(rerouteMessage, mutedRef.current);
 
-      
           const bothOnCampus =
             pos.latitude > CAMPUS_BOUNDS.minLat &&
             pos.latitude < CAMPUS_BOUNDS.maxLat &&
@@ -1305,6 +1367,41 @@ function speakInstruction(text: string, muted: boolean) {
     }
   }
 
+  // Split the route polyline into "already walked" vs "remaining" so the
+  // map can shade them differently. This used to run inline in JSX (an
+  // O(n) scan over every route point) on every single render of the
+  // screen — including renders triggered by unrelated state like friend
+  // location updates or event list refreshes — and allocated brand new
+  // coordinate arrays each time, which forces react-native-maps to tear
+  // down and rebuild the native polyline layer repeatedly. Memoizing it
+  // ties the work to the values that actually matter.
+  const routeSplit = useMemo(() => {
+    if (!directions || !userLocation) {
+      return {
+        traveled: [] as { latitude: number; longitude: number }[],
+        remaining: [] as { latitude: number; longitude: number }[],
+      };
+    }
+    let closestIdx = 0;
+    let minDist = Infinity;
+    directions.polylinePoints.forEach((pt, i) => {
+      const d = haversineMetres(
+        userLocation.latitude,
+        userLocation.longitude,
+        pt.latitude,
+        pt.longitude,
+      );
+      if (d < minDist) {
+        minDist = d;
+        closestIdx = i;
+      }
+    });
+    return {
+      traveled: directions.polylinePoints.slice(0, closestIdx + 1),
+      remaining: directions.polylinePoints.slice(closestIdx),
+    };
+  }, [directions, userLocation]);
+
   function handleStopNavigation() {
     setNavigating(false);
     setFollowUser(false);
@@ -1367,52 +1464,66 @@ function speakInstruction(text: string, muted: boolean) {
     });
   }
 
-  const eventOccupiedCoords = new Set(
-    events
-      .filter((ev) => ev.latitude && ev.longitude)
-      .map((ev) => `${ev.latitude?.toFixed(4)},${ev.longitude?.toFixed(4)}`),
+  const eventOccupiedCoords = useMemo(
+    () =>
+      new Set(
+        events
+          .filter((ev) => ev.latitude && ev.longitude)
+          .map(
+            (ev) => `${ev.latitude?.toFixed(4)},${ev.longitude?.toFixed(4)}`,
+          ),
+      ),
+    [events],
   );
 
-  const visibleBuildings = [
-    ...BUILDINGS,
-    ...communityLocations.map((loc) => ({
-      id: loc.id,
-      name: loc.name,
-      latitude: loc.latitude,
-      longitude: loc.longitude,
-      icon: loc.icon || "📍",
-      description: loc.description || "Community location",
-      category: loc.category || "other",
-    })),
-  ]
-    .filter((b) => {
-      const coordKey = `${b.latitude?.toFixed(4)},${b.longitude?.toFixed(4)}`;
-      if (eventOccupiedCoords.has(coordKey)) return false;
-      const matchesCategory =
-        search.length > 0 || filterCat === "all" || b.category === filterCat;
-      const matchesSearch =
-        b.name.toLowerCase().includes(search.toLowerCase()) ||
-        b.description.toLowerCase().includes(search.toLowerCase()) ||
-        b.category.toLowerCase().includes(search.toLowerCase());
-      return matchesCategory && matchesSearch;
-    })
-    .sort((a, b) => {
-      if (!userLocation) return 0;
-      return (
-        haversineMetres(
-          userLocation.latitude,
-          userLocation.longitude,
-          a.latitude,
-          a.longitude,
-        ) -
-        haversineMetres(
-          userLocation.latitude,
-          userLocation.longitude,
-          b.latitude,
-          b.longitude,
-        )
-      );
-    });
+  const visibleBuildings = useMemo(() => {
+    return [
+      ...BUILDINGS,
+      ...communityLocations.map((loc) => ({
+        id: loc.id,
+        name: loc.name,
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        icon: loc.icon || "📍",
+        description: loc.description || "Community location",
+        category: loc.category || "other",
+      })),
+    ]
+      .filter((b) => {
+        const coordKey = `${b.latitude?.toFixed(4)},${b.longitude?.toFixed(4)}`;
+        if (eventOccupiedCoords.has(coordKey)) return false;
+        const matchesCategory =
+          search.length > 0 || filterCat === "all" || b.category === filterCat;
+        const matchesSearch =
+          b.name.toLowerCase().includes(search.toLowerCase()) ||
+          b.description.toLowerCase().includes(search.toLowerCase()) ||
+          b.category.toLowerCase().includes(search.toLowerCase());
+        return matchesCategory && matchesSearch;
+      })
+      .sort((a, b) => {
+        if (!userLocation) return 0;
+        return (
+          haversineMetres(
+            userLocation.latitude,
+            userLocation.longitude,
+            a.latitude,
+            a.longitude,
+          ) -
+          haversineMetres(
+            userLocation.latitude,
+            userLocation.longitude,
+            b.latitude,
+            b.longitude,
+          )
+        );
+      });
+  }, [
+    communityLocations,
+    eventOccupiedCoords,
+    search,
+    filterCat,
+    userLocation,
+  ]);
 
   // ── Google Maps style top instruction banner ───────────────────────────────
   function renderNavBanner() {
@@ -2216,10 +2327,6 @@ function speakInstruction(text: string, muted: boolean) {
         <View style={{ display: activeTab === "events" ? "flex" : "none" }}>
           {renderEventsTab()}
         </View>
-        {/* SERVICES TAB */}
-        <View style={{ display: activeTab === "services" ? "flex" : "none", flex: 1 }}>
-          <ServicesTab userId={userId} userName={userName} />
-        </View>
       </>
     );
   }
@@ -2264,11 +2371,10 @@ function speakInstruction(text: string, muted: boolean) {
   }
 
   const bottomSheetTall =
-  activeTab === "buildings" ||
-  activeTab === "friends" ||
-  activeTab === "events" ||
-  activeTab === "services" ||   // ← ADD THIS LINE
-  !!directions;
+    activeTab === "buildings" ||
+    activeTab === "friends" ||
+    activeTab === "events" ||
+    !!directions;
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
@@ -2277,7 +2383,9 @@ function speakInstruction(text: string, muted: boolean) {
 
       {/* ── MAP ── */}
       <MapView
-        ref={mapRef}
+        mapRef={(ref: any) => {
+          mapRef.current = ref;
+        }}
         style={styles.map}
         provider={PROVIDER_GOOGLE}
         showsUserLocation={false}
@@ -2296,14 +2404,27 @@ function speakInstruction(text: string, muted: boolean) {
           if (navigating) setFollowUser(false);
         }}
         customMapStyle={[]}
+        // ── Clustering (react-native-map-clustering) ──
+        // Off while actively navigating: at that point there's really
+        // just the route + destination to look at, and clustering math
+        // on every region change is wasted work during a GPS-driven
+        // camera that's already moving every ~800ms.
+        clusteringEnabled={!navigating}
+        clusterColor="#1a5c38"
+        clusterTextColor="#fff"
+        radius={60}
+        minPoints={3}
+        spiralEnabled={false}
+        preserveClusterPressBehavior={false}
+        edgePadding={{ top: 120, left: 40, right: 40, bottom: 380 }}
       >
         {(displayUserLocation ?? userLocation) && (
           <Marker
             coordinate={displayUserLocation ?? userLocation!}
-          anchor={{ x: 0.5, y: 0.5 }}
-          flat={true}
-          rotation={smoothedHeading}   // CHANGE 8: was `heading` (jerky raw value)
-        >
+            anchor={{ x: 0.5, y: 0.5 }}
+            flat={true}
+            rotation={smoothedHeading} // CHANGE 8: was `heading` (jerky raw value)
+          >
             <View
               style={{
                 width: 80,
@@ -2432,47 +2553,23 @@ function speakInstruction(text: string, muted: boolean) {
             </Marker>
           ))}
 
-        
-        
-        {directions &&
-          userLocation &&
-          (() => {
-            let closestIdx = 0;
-            let minDist = Infinity;
-            directions.polylinePoints.forEach((pt, i) => {
-              const d = haversineMetres(
-                userLocation.latitude,
-                userLocation.longitude,
-                pt.latitude,
-                pt.longitude,
-              );
-              if (d < minDist) {
-                minDist = d;
-                closestIdx = i;
-              }
-            });
-            const traveled = directions.polylinePoints.slice(0, closestIdx + 1);
-            const remaining = directions.polylinePoints.slice(closestIdx);
-            return (
-              <>
-                {navigating && traveled.length > 1 && (
-                  <Polyline
-                    coordinates={traveled}
-                    strokeColor="#9bbcf5"
-                    strokeWidth={6}
-                    lineCap="round"
-                  />
-                )}
-                <Polyline
-                  coordinates={remaining}
-                  strokeColor="#1A73E8"
-                  strokeWidth={navigating ? 8 : 5}
-                  lineCap="round"
-                  lineJoin="round"
-                />
-              </>
-            );
-          })()}
+        {navigating && routeSplit.traveled.length > 1 && (
+          <Polyline
+            coordinates={routeSplit.traveled}
+            strokeColor="#9bbcf5"
+            strokeWidth={6}
+            lineCap="round"
+          />
+        )}
+        {routeSplit.remaining.length > 1 && (
+          <Polyline
+            coordinates={routeSplit.remaining}
+            strokeColor="#1A73E8"
+            strokeWidth={navigating ? 8 : 5}
+            lineCap="round"
+            lineJoin="round"
+          />
+        )}
       </MapView>
 
       {/* ── OVERLAYS ── */}
@@ -2647,11 +2744,10 @@ function speakInstruction(text: string, muted: boolean) {
                 keyboardShouldPersistTaps="handled"
               >
                 {[
-                  { tab: "home",      icon: "🏠", label: "Home" },
+                  { tab: "home", icon: "🏠", label: "Home" },
                   { tab: "buildings", icon: "📍", label: "Places" },
-                  { tab: "friends",   icon: "👥", label: "Friends" },
-                  { tab: "events",    icon: "🗓️", label: "Events" },
-                  { tab: "services",  icon: "🛍️", label: "Services" },
+                  { tab: "friends", icon: "👥", label: "Friends" },
+                  { tab: "events", icon: "🗓️", label: "Events" },
                 ].map(({ tab, icon, label }) => (
                   <TouchableOpacity
                     key={tab}
@@ -2704,7 +2800,7 @@ function speakInstruction(text: string, muted: boolean) {
               </ScrollView>
             )}
           </View>
-</KeyboardAvoidingView>
+        </KeyboardAvoidingView>
       )}
 
       {/* ── NAVIGATION STEPS SHEET ── */}
@@ -2714,7 +2810,7 @@ function speakInstruction(text: string, muted: boolean) {
 
       {/* ── AR MODE OVERLAY ── */}
       {arMode && navigating && directions && selected && userLocation && (
-        <ARNavigation
+        <ARNavigationGate
           userLocation={userLocation}
           destination={selected}
           heading={smoothedHeading}
@@ -3112,6 +3208,7 @@ const styles = StyleSheet.create({
   bottomNavContent: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-around",
     paddingTop: 10,
     paddingHorizontal: 4,
     minWidth: "100%",

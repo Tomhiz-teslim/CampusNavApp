@@ -37,12 +37,22 @@ export default function CompassPointer({
   destLng,
   distanceMetres,
 }: Props) {
-  if (!userLat || !userLng || !destLat || !destLng) return null;
-
+  // NOTE: all hooks must run unconditionally, on every render, in the same
+  // order — that's a hard React rule, not a style preference. The old code
+  // had `if (!userLat || ...) return null;` BEFORE the useState/useRef/
+  // useEffect calls below. That's a real crash bug: if this component ever
+  // stays mounted across a render where one of the props is briefly falsy
+  // (e.g. a GPS glitch returning 0 for latitude while reacquiring a fix —
+  // a known real-device behavior, not hypothetical) React throws "Rendered
+  // fewer hooks than expected" and crashes that render tree. Hooks now run
+  // first unconditionally; the invalid-props check only gates what we
+  // *render*, not which hooks get called.
   const [heading, setHeading] = useState(0);
   const smoothedHeading = useRef(0);
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const lastRotation = useRef(0);
+
+  const hasValidProps = !!(userLat && userLng && destLat && destLng);
 
   useEffect(() => {
     Magnetometer.setUpdateInterval(100);
@@ -55,30 +65,40 @@ export default function CompassPointer({
     return () => sub.remove();
   }, []);
 
-  const targetBearing = bearingTo(userLat, userLng, destLat, destLng);
+  // Guard the bearing math too — bearingTo() with undefined/0 coords would
+  // otherwise run every render even while props are invalid.
+  const targetBearing = hasValidProps
+    ? bearingTo(userLat, userLng, destLat, destLng)
+    : 0;
 
   let arrowRotation = (targetBearing - heading + 360) % 360;
 
   let delta = arrowRotation - lastRotation.current;
   if (delta > 180) delta -= 360;
   if (delta < -180) delta += 360;
-  const newRotation = lastRotation.current + delta;
+  const newRotation = hasValidProps
+    ? lastRotation.current + delta
+    : lastRotation.current;
   lastRotation.current = newRotation;
 
   useEffect(() => {
+    if (!hasValidProps) return;
     Animated.timing(rotateAnim, {
       toValue: newRotation,
       duration: 200,
       easing: Easing.out(Easing.quad),
       useNativeDriver: true,
     }).start();
-  }, [newRotation]);
+  }, [newRotation, hasValidProps]);
 
   const spin = rotateAnim.interpolate({
     inputRange: [-360, 0, 360, 720],
     outputRange: ["-360deg", "0deg", "360deg", "720deg"],
     extrapolate: "extend",
   });
+
+  // All hooks have now run — safe to bail out of rendering.
+  if (!hasValidProps) return null;
 
   const distLabel =
     distanceMetres < 1000

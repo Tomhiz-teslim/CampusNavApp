@@ -1,10 +1,17 @@
 import { useState } from "react";
 import {
   View, Text, TouchableOpacity,
-  StyleSheet, TextInput,
+  StyleSheet, TextInput, Platform,
 } from "react-native";
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
 import { router } from "expo-router";
+import Constants from "expo-constants";
+
+// See home.tsx for the full explanation: Expo Go on iOS doesn't bundle the
+// Google Maps native SDK, so forcing PROVIDER_GOOGLE there crashes this
+// screen natively on mount (no red screen — just closes). Android and a
+// standalone/dev-client iOS build both keep Google Maps.
+const isExpoGo = Constants.appOwnership === "expo";
 
 const BUILDINGS = [
   { id: 1, name: "Faculty of Engineering", latitude: 6.5158, longitude: 3.3896, icon: "🏛️" },
@@ -52,13 +59,16 @@ export default function MapScreen() {
       {/* Map */}
       <MapView
         style={styles.map}
-        provider={PROVIDER_GOOGLE}
+        provider={
+          Platform.OS === "ios" && isExpoGo ? undefined : PROVIDER_GOOGLE
+        }
         initialRegion={{
           latitude: 6.5155,
           longitude: 3.3896,
           latitudeDelta: 0.01,
           longitudeDelta: 0.01,
         }}
+        userInterfaceStyle="light"
       >
         {filtered.map((building) => (
           <Marker
