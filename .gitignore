@@ -41,3 +41,6 @@ app-example
 # generated native folders
 /ios
 /android
+eas-archive-check/
+eas-check-2/
+eas-check-3/

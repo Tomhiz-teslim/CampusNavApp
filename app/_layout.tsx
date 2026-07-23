@@ -18,6 +18,14 @@ export default function RootLayout() {
   // that whole window so nothing else can flash on screen first.
   const [initializing, setInitializing] = useState(true);
 
+  // Keep the splash up for at least 5s regardless of how fast Firebase
+  // resolves, so it doesn't just flash by on a fast connection.
+  const [minTimeElapsed, setMinTimeElapsed] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setMinTimeElapsed(true), 3000);
+    return () => clearTimeout(t);
+  }, []);
+
   // Subscribe to auth state once. onAuthStateChanged fires immediately
   // with the persisted session (if any) on startup, then again on every
   // sign-in/sign-out — so this single listener drives all navigation.
@@ -33,7 +41,7 @@ export default function RootLayout() {
   // and the initial auth check has resolved — this is what prevents the
   // flicker between splash/login/home on cold start.
   useEffect(() => {
-    if (!rootState?.key || initializing) return;
+    if (!rootState?.key || initializing || !minTimeElapsed) return;
 
     const currentRoute = segments[0] ?? "";
     const onPublicRoute = PUBLIC_ROUTES.has(currentRoute);
@@ -46,12 +54,12 @@ export default function RootLayout() {
       // successful login, or reopening the app with a saved session).
       router.replace("/home");
     }
-  }, [rootState?.key, initializing, user, segments]);
+  }, [rootState?.key, initializing, minTimeElapsed, user, segments]);
 
   // Keep the splash screen mounted until we know the auth state. This
   // is the "no flickering" requirement: we never briefly render login
   // or home before the redirect above has a chance to run.
-  if (initializing) {
+  if (initializing || !minTimeElapsed) {
     return <SplashScreen />;
   }
 

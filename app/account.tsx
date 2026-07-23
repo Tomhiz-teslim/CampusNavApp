@@ -2146,10 +2146,7 @@ function UserAccount() {
     },
     {
       icon: "🔎", label: "Lost & Found", sub: "Report or search for lost items",
-      info: {
-        title: "Lost & Found", icon: "🔎",
-        body: "This feature doesn't have a backend yet. A simple version can reuse the same pattern as Submit a Location: a `lostAndFound` node in the database, a submission form, and a browsable list.",
-      },
+      route: "/lostfound",
     },
     {
       icon: "📖", label: "Campus Directory", sub: "Departments, offices & contacts",
@@ -2839,4 +2836,4 @@ const styles = StyleSheet.create({
     borderColor: "#ffcccc",
   },
   signOutFullText: { color: "#cc2222", fontSize: 15, fontWeight: "700" },
-});
+}); 

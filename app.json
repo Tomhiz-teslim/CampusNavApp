@@ -16,7 +16,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.eventeslim.campusnavapp2",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "CampusNav uses your location to show you on the map and guide you to campus buildings, events, and services.",
+        "NSCameraUsageDescription": "CampusNav uses your camera for AR walking directions overlaid on your surroundings."
       }
     },
     "android": {
@@ -29,13 +31,30 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "resize",
-      "package": "com.even_teslim.CampusNavApp2"
+      "package": "com.even_teslim.CampusNavApp2",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyA_T1EJfpPK0XV-EN6G0APpJdr43eYRoiA"
+        }
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "CAMERA"
+      ]
     },
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+
+      [
+    "expo-image-picker",
+    {
+      "photosPermission": "Allow $(PRODUCT_NAME) to access your photos so you can attach a photo to a found item."
+    }
+  ],
       "expo-router",
       [
         "expo-splash-screen",
@@ -58,14 +77,12 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "54610ec9-36b1-4952-8ba4-2dbee0b5652b"
+        "projectId": "fc378d3f-e858-42b0-bf13-3685ad052243"
       }
     },
     "runtimeVersion": {
       "policy": "appVersion"
     },
-    "updates": {
-      "url": "https://u.expo.dev/54610ec9-36b1-4952-8ba4-2dbee0b5652b"
-    }
+    "owner": "even_tomiwa"
   }
 }

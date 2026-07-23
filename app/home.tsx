@@ -145,6 +145,46 @@ const STEP_ADVANCE_DRIVING_M = 60;
 // ── Tab skeleton loader ───────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Android-only fix: react-native-maps snapshots custom View markers into a
+// bitmap. If tracksViewChanges is false from the very first render, and that
+// first render fires before the View (emoji/colors) has actually painted —
+// which happens here because `loc` streams in asynchronously from Firebase —
+// the marker gets frozen as a blank bitmap forever. Keeping tracksViewChanges
+// true for one short window after mount lets it snapshot for real, then we
+// freeze it off so we don't pay the perf cost long-term. iOS doesn't need
+// this (no snapshotting there) so it's skipped on that platform.
+function CommunityLocationMarker({
+  loc,
+  onPress,
+}: {
+  loc: any;
+  onPress: () => void;
+}) {
+  const [tracks, setTracks] = useState(Platform.OS === "android");
+
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const t = setTimeout(() => setTracks(false), 600);
+    return () => clearTimeout(t);
+  }, []);
+
+  return (
+    <Marker
+      coordinate={{ latitude: loc.latitude, longitude: loc.longitude }}
+      onPress={onPress}
+      anchor={{ x: 0.5, y: 1 }}
+      tracksViewChanges={tracks}
+    >
+      <View
+        style={[mStyles.pin, { backgroundColor: "#7c3aed", borderColor: "#ede9fe" }]}
+      >
+        <Text style={mStyles.emoji}>{loc.icon || "📍"}</Text>
+      </View>
+      <View style={[mStyles.pinTail, { borderTopColor: "#7c3aed" }]} />
+    </Marker>
+  );
+}
+
 export default function HomeScreen() {
   const [userName, setUserName] = useState("");
   const [userId, setUserId] = useState("");
@@ -152,6 +192,7 @@ export default function HomeScreen() {
   const [selected, setSelected] = useState<any>(null);
   const [activeTab, setActiveTab] = useState("home");
   const [filterCat, setFilterCat] = useState("all");
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   // Directions / navigation
   const [directions, setDirections] = useState<DirectionsResult | null>(null);
@@ -304,6 +345,21 @@ export default function HomeScreen() {
       });
     }, 300);
   }
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      setKeyboardHeight(e.endCoordinates?.height ?? 0);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   useEffect(() => {
     directionsRef.current = directions;
@@ -2254,10 +2310,16 @@ export default function HomeScreen() {
         {/* BUILDINGS TAB */}
         <View style={{ display: activeTab === "buildings" ? "flex" : "none" }}>
           <Text style={styles.tabTitle}>
-            📍 All Locations (
-            {communityLoaded
-              ? BUILDINGS.length + communityLocations.length
-              : BUILDINGS.length}
+            📍{" "}
+            {filterCat === "all"
+              ? "All Locations"
+              : `${filterCat.charAt(0).toUpperCase()}${filterCat.slice(1)} Locations`}{" "}
+            (
+            {filterCat === "all"
+              ? communityLoaded
+                ? BUILDINGS.length + communityLocations.length
+                : BUILDINGS.length
+              : BUILDINGS.filter((b) => b.category === filterCat).length}
             )
           </Text>
           <ScrollView
@@ -2506,9 +2568,9 @@ export default function HomeScreen() {
           ))}
 
         {communityLocations.map((loc) => (
-          <Marker
+          <CommunityLocationMarker
             key={loc.id}
-            coordinate={{ latitude: loc.latitude, longitude: loc.longitude }}
+            loc={loc}
             onPress={() => {
               setSelected({
                 ...loc,
@@ -2517,19 +2579,7 @@ export default function HomeScreen() {
               setDirections(null);
               setNavigating(false);
             }}
-            anchor={{ x: 0.5, y: 1 }}
-            tracksViewChanges={false}
-          >
-            <View
-              style={[
-                mStyles.pin,
-                { backgroundColor: "#7c3aed", borderColor: "#ede9fe" },
-              ]}
-            >
-              <Text style={mStyles.emoji}>{loc.icon || "📍"}</Text>
-            </View>
-            <View style={[mStyles.pinTail, { borderTopColor: "#7c3aed" }]} />
-          </Marker>
+          />
         ))}
 
         {events
@@ -2718,10 +2768,7 @@ export default function HomeScreen() {
 
       {/* ── BOTTOM SHEET ── */}
       {!navigating && (
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={styles.keyboardAvoid}
-        >
+        <View style={[styles.keyboardAvoid, { bottom: keyboardHeight }]}>
           <View
             style={[
               styles.bottomSheet,
@@ -2801,7 +2848,7 @@ export default function HomeScreen() {
               </ScrollView>
             )}
           </View>
-        </KeyboardAvoidingView>
+        </View>
       )}
 
       {/* ── NAVIGATION STEPS SHEET ── */}
