@@ -2146,10 +2146,6 @@ function UserAccount() {
       route: "/lostfound",
     },
     {
-      icon: "📖", label: "Campus Directory", sub: "Departments, offices & contacts",
-      route: "/campus-directory",
-    },
-    {
       icon: "💬", label: "Help & Support", sub: "Get help using Compass",
       route: "/help-support",
     },
