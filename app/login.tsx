@@ -8,98 +8,99 @@ import { auth, database } from "../lib/firebase";
 import {
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
-  GoogleAuthProvider,
-  signInWithCredential,
+  // GoogleAuthProvider,
+  // signInWithCredential,
 } from "firebase/auth";
 import { ref, get, set } from "firebase/database";
-import * as WebBrowser from "expo-web-browser";
-import * as Google from "expo-auth-session/providers/google";
+// import * as WebBrowser from "expo-web-browser";
+// import * as Google from "expo-auth-session/providers/google";
 import { router } from "expo-router";
+
+// ── Google Sign-In: fully wired below, just disabled for now. ──────────────
+// later on i will make it possible when i want to upload the app to Play
+// store and app store (Google OAuth needs the app to be on a signed release
+// build / store listing to fully validate — re-enable by uncommenting the
+// imports above and the block marked GOOGLE SIGN-IN below, then restoring
+// the button in the JSX further down).
 
 // Required once per app so the OAuth browser tab closes itself and
 // hands control back to the app after Google redirects.
-WebBrowser.maybeCompleteAuthSession();
+// WebBrowser.maybeCompleteAuthSession();
 
-const GOOGLE_WEB_CLIENT_ID = "407873622972-bru14q2e9qvc9lb2nvasgl9g6l0h2n15.apps.googleusercontent.com";
-const GOOGLE_ANDROID_CLIENT_ID = "407873622972-iik25a7m5qe5ki9ep5rrhsijpdqd2ukb.apps.googleusercontent.com";
-const GOOGLE_IOS_CLIENT_ID = "407873622972-q338efs78bc2q6326f10of1t267pti54.apps.googleusercontent.com";
+// const GOOGLE_WEB_CLIENT_ID = "407873622972-bru14q2e9qvc9lb2nvasgl9g6l0h2n15.apps.googleusercontent.com";
+// const GOOGLE_ANDROID_CLIENT_ID = "407873622972-iik25a7m5qe5ki9ep5rrhsijpdqd2ukb.apps.googleusercontent.com";
+// const GOOGLE_IOS_CLIENT_ID = "407873622972-q338efs78bc2q6326f10of1t267pti54.apps.googleusercontent.com";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
+  // const [googleLoading, setGoogleLoading] = useState(false);
   const [resetMode, setResetMode] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    webClientId: GOOGLE_WEB_CLIENT_ID,
-    androidClientId: GOOGLE_ANDROID_CLIENT_ID,
-    iosClientId: GOOGLE_IOS_CLIENT_ID,
-  });
+  // ── GOOGLE SIGN-IN (disabled — see note above) ──────────────────────────
+  // const [request, response, promptAsync] = Google.useAuthRequest({
+  //   webClientId: GOOGLE_WEB_CLIENT_ID,
+  //   androidClientId: GOOGLE_ANDROID_CLIENT_ID,
+  //   iosClientId: GOOGLE_IOS_CLIENT_ID,
+  // });
 
-  // Fires when promptAsync() resolves with a result from the Google
-  // OAuth screen (success, cancel, or error).
-  useEffect(() => {
-    if (response?.type === "success") {
-      const { id_token } = response.params;
-      handleGoogleCredential(id_token);
-    } else if (response?.type === "error") {
-      setErrorMsg("Google sign-in failed. Please try again.");
-      setGoogleLoading(false);
-    } else if (response?.type === "cancel" || response?.type === "dismiss") {
-      setGoogleLoading(false);
-    }
-  }, [response]);
+  // useEffect(() => {
+  //   if (response?.type === "success") {
+  //     const { id_token } = response.params;
+  //     handleGoogleCredential(id_token);
+  //   } else if (response?.type === "error") {
+  //     setErrorMsg("Google sign-in failed. Please try again.");
+  //     setGoogleLoading(false);
+  //   } else if (response?.type === "cancel" || response?.type === "dismiss") {
+  //     setGoogleLoading(false);
+  //   }
+  // }, [response]);
 
-  async function handleGoogleCredential(idToken: string) {
-    setErrorMsg("");
-    try {
-      const credential = GoogleAuthProvider.credential(idToken);
-      const { user } = await signInWithCredential(auth, credential);
+  // async function handleGoogleCredential(idToken: string) {
+  //   setErrorMsg("");
+  //   try {
+  //     const credential = GoogleAuthProvider.credential(idToken);
+  //     const { user } = await signInWithCredential(auth, credential);
 
-      // First-time Google sign-in: create the same users/{uid} record
-      // that register.tsx creates for email sign-up, so the rest of the
-      // app (which reads users/{uid} for fullName/faculty/etc.) works
-      // the same regardless of how the user signed in.
-      const userRef = ref(database, "users/" + user.uid);
-      const snap = await get(userRef);
-      if (!snap.exists()) {
-        await set(userRef, {
-          fullName: user.displayName || "",
-          matricNo: "",
-          email: user.email || "",
-          faculty: "",
-          createdAt: Date.now(),
-        });
-      }
+  //     const userRef = ref(database, "users/" + user.uid);
+  //     const snap = await get(userRef);
+  //     if (!snap.exists()) {
+  //       await set(userRef, {
+  //         fullName: user.displayName || "",
+  //         matricNo: "",
+  //         email: user.email || "",
+  //         faculty: "",
+  //         createdAt: Date.now(),
+  //       });
+  //     }
 
-      router.replace("/home");
-    } catch (error: any) {
-      setErrorMsg(error.message || "Google sign-in failed. Please try again.");
-    }
-    setGoogleLoading(false);
-  }
+  //     router.replace("/home");
+  //   } catch (error: any) {
+  //     setErrorMsg(error.message || "Google sign-in failed. Please try again.");
+  //   }
+  //   setGoogleLoading(false);
+  // }
 
-  async function handleGoogleSignIn() {
-    setErrorMsg("");
-    setSuccessMsg("");
-    setGoogleLoading(true);
-    try {
-      const result = await promptAsync();
-      // If the user closed the sheet without completing, clear loading here;
-      // otherwise the useEffect above handles success/error/cancel.
-      if (result.type !== "success") {
-        setGoogleLoading(false);
-      }
-    } catch {
-      setErrorMsg("Could not start Google sign-in. Please try again.");
-      setGoogleLoading(false);
-    }
-  }
+  // async function handleGoogleSignIn() {
+  //   setErrorMsg("");
+  //   setSuccessMsg("");
+  //   setGoogleLoading(true);
+  //   try {
+  //     const result = await promptAsync();
+  //     if (result.type !== "success") {
+  //       setGoogleLoading(false);
+  //     }
+  //   } catch {
+  //     setErrorMsg("Could not start Google sign-in. Please try again.");
+  //     setGoogleLoading(false);
+  //   }
+  // }
+  // ─────────────────────────────────────────────────────────────────────────
 
   async function handleLogin() {
     setErrorMsg("");
@@ -195,20 +196,14 @@ export default function LoginScreen() {
             <View style={styles.dividerLine} />
           </View>
 
-          <TouchableOpacity
-            style={styles.googleBtn}
-            onPress={handleGoogleSignIn}
-            disabled={!request || googleLoading}
-          >
-            {googleLoading ? (
-              <ActivityIndicator color="#1a5c38" />
-            ) : (
-              <>
-                <Text style={styles.googleIcon}>G</Text>
-                <Text style={styles.googleBtnText}>Continue with Google</Text>
-              </>
-            )}
-          </TouchableOpacity>
+          {/* Google Sign-In temporarily replaced with a coming-soon notice.
+              // later on i will make it possible when i want to upload the
+              // app to Play store and app store — see the commented block
+              // above for the full working implementation to restore. */}
+          <View style={styles.googleComingSoon}>
+            <Text style={styles.googleComingSoonIcon}>G</Text>
+            <Text style={styles.googleComingSoonText}>Google Sign-In coming soon</Text>
+          </View>
 
           <View style={styles.registerRow}>
             <Text style={styles.registerText}>Don't have an account? </Text>
@@ -247,16 +242,17 @@ const styles = StyleSheet.create({
   dividerLine: { flex: 1, height: 1, backgroundColor: "#e0e0e0" },
   dividerText: { marginHorizontal: 10, color: "#999", fontSize: 12, fontWeight: "600" },
 
-  googleBtn: {
+  googleComingSoon: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",
-    borderWidth: 1.5, borderColor: "#e0e0e0", borderRadius: 10, padding: 14, gap: 10,
+    borderWidth: 1.5, borderColor: "#eee", borderRadius: 10, padding: 14, gap: 10,
+    backgroundColor: "#fafafa",
   },
-  googleIcon: {
-    fontSize: 16, fontWeight: "bold", color: "#4285F4",
+  googleComingSoonIcon: {
+    fontSize: 16, fontWeight: "bold", color: "#bbb",
     borderWidth: 1.5, borderColor: "#e0e0e0", borderRadius: 12,
     width: 24, height: 24, textAlign: "center", lineHeight: 22,
   },
-  googleBtnText: { color: "#333", fontSize: 15, fontWeight: "600" },
+  googleComingSoonText: { color: "#999", fontSize: 15, fontWeight: "600" },
 
   registerRow: { flexDirection: "row", justifyContent: "center", marginTop: 20 },
   registerText: { color: "#888", fontSize: 13 },
