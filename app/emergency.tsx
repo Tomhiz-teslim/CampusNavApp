@@ -52,24 +52,57 @@ export default function EmergencyScreen() {
   const [groups, setGroups] = useState<EmergencyGroup[]>(DEFAULT_EMERGENCY_CONTACTS);
   const [loading, setLoading] = useState(true);
   const [usingDefaults, setUsingDefaults] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
-    const unsub = onValue(ref(database, "emergencyContacts"), (snap) => {
-      const data = snap.val();
-      if (data && Array.isArray(data) && data.length > 0) {
-        setGroups(data);
-        setUsingDefaults(false);
-      } else if (data && typeof data === "object" && Object.keys(data).length > 0) {
-        // Also accept an object-of-groups shape (Firebase push keys etc.)
-        setGroups(Object.values(data) as EmergencyGroup[]);
-        setUsingDefaults(false);
-      } else {
+    // Safety net: if Firebase never calls back (denied rules, dropped
+    // connection, etc.) don't leave the user staring at a spinner forever —
+    // fall back to the defaults after a few seconds.
+    const timeout = setTimeout(() => {
+      setLoading((wasLoading) => {
+        if (wasLoading) {
+          setGroups(DEFAULT_EMERGENCY_CONTACTS);
+          setUsingDefaults(true);
+          setLoadError(true);
+        }
+        return false;
+      });
+    }, 6000);
+
+    const unsub = onValue(
+      ref(database, "emergencyContacts"),
+      (snap) => {
+        clearTimeout(timeout);
+        setLoadError(false);
+        const data = snap.val();
+        if (data && Array.isArray(data) && data.length > 0) {
+          setGroups(data);
+          setUsingDefaults(false);
+        } else if (data && typeof data === "object" && Object.keys(data).length > 0) {
+          // Also accept an object-of-groups shape (Firebase push keys etc.)
+          setGroups(Object.values(data) as EmergencyGroup[]);
+          setUsingDefaults(false);
+        } else {
+          setGroups(DEFAULT_EMERGENCY_CONTACTS);
+          setUsingDefaults(true);
+        }
+        setLoading(false);
+      },
+      (error) => {
+        // Firebase denied the read or the request otherwise failed —
+        // don't hang on the spinner, just fall back to defaults.
+        clearTimeout(timeout);
+        console.error("emergencyContacts read failed:", error);
         setGroups(DEFAULT_EMERGENCY_CONTACTS);
         setUsingDefaults(true);
+        setLoadError(true);
+        setLoading(false);
       }
-      setLoading(false);
-    });
-    return () => unsub();
+    );
+    return () => {
+      clearTimeout(timeout);
+      unsub();
+    };
   }, []);
 
   function call(number: string) {
@@ -119,7 +152,9 @@ export default function EmergencyScreen() {
           {usingDefaults && (
             <View style={styles.notice}>
               <Text style={styles.noticeText}>
-                ⚠️ These are placeholder numbers. An admin needs to add real contacts to the `emergencyContacts` node in Firebase.
+                {loadError
+                  ? "⚠️ Couldn't reach the server — showing placeholder numbers. Check your connection and reopen this screen to retry."
+                  : "⚠️ These are placeholder numbers. An admin needs to add real contacts to the `emergencyContacts` node in Firebase."}
               </Text>
             </View>
           )}
