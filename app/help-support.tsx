@@ -17,8 +17,8 @@ import { ref, push, set } from "firebase/database";
 
 // ── Contact channels ─────────────────────────────────────────────────────
 // Swap these for the real support inbox / WhatsApp line before release.
-const SUPPORT_EMAIL = "support@compass-unilag.app";
-const SUPPORT_WHATSAPP = "2348000000000"; // international format, no leading +
+const SUPPORT_EMAIL = "tomhizb12@gmail.com";
+const SUPPORT_WHATSAPP = "2347040377888"; // international format, no leading +
 
 const FAQS = [
   {

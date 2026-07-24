@@ -35,8 +35,7 @@ const WHY_US = [
 ];
 
 const CONTACT = [
-  { icon: "✉️", label: "Email", value: "support@campusnav.app", url: "mailto:support@campusnav.app" },
-  { icon: "🌐", label: "Website", value: "www.campusnav.app", url: "https://www.campusnav.app" },
+  { icon: "✉️", label: "Email", value: "support@campusnav.app", url: "mailto: tomhizb12@gmail.com" },
   { icon: "📷", label: "Instagram", value: "@campusnav", url: "https://instagram.com/campusnav" },
   { icon: "💼", label: "LinkedIn", value: "Even Tech", url: "https://linkedin.com/company/eventech" },
 ];
