@@ -75,6 +75,7 @@ export default function RootLayout() {
         <Stack.Screen name="cafeteria" />
         <Stack.Screen name="shuttle" />
         <Stack.Screen name="submit-location" />
+        <Stack.Screen name="emergency" />
         <Stack.Screen name="map" />
         <Stack.Screen name="(tabs)" />
       </Stack>

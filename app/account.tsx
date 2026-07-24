@@ -2139,10 +2139,7 @@ function UserAccount() {
     },
     {
       icon: "🚨", label: "Emergency Contacts", sub: "Security, health centre & wardens",
-      info: {
-        title: "Emergency Contacts", icon: "🚨",
-        body: "Add your campus's real emergency numbers here (security post, health centre, hall wardens). This panel is a placeholder — wire it up to a Firebase node (e.g. `emergencyContacts`) so admins can update numbers without an app update.",
-      },
+      route: "/emergency",
     },
     {
       icon: "🔎", label: "Lost & Found", sub: "Report or search for lost items",
@@ -2345,6 +2342,7 @@ function UserAccount() {
     </ScrollView>
   );
 }
+
 // ═══════════════════════════════════════════════════════════════════
 // STYLES
 // ═══════════════════════════════════════════════════════════════════
@@ -2836,4 +2834,4 @@ const styles = StyleSheet.create({
     borderColor: "#ffcccc",
   },
   signOutFullText: { color: "#cc2222", fontSize: 15, fontWeight: "700" },
-}); 
+});
