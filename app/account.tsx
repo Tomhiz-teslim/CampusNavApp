@@ -2147,31 +2147,19 @@ function UserAccount() {
     },
     {
       icon: "📖", label: "Campus Directory", sub: "Departments, offices & contacts",
-      info: {
-        title: "Campus Directory", icon: "📖",
-        body: "Placeholder for a searchable list of departments/offices. Can reuse the BUILDINGS data already in the app, extended with phone/email fields.",
-      },
+      route: "/campus-directory",
     },
     {
       icon: "💬", label: "Help & Support", sub: "Get help using Compass",
-      info: {
-        title: "Help & Support", icon: "💬",
-        body: "Reach the Compass team for help with your account, a bug, or a suggestion. Replace this with a real support email/WhatsApp link before release.",
-      },
+      route: "/help-support",
     },
     {
       icon: "ℹ️", label: "About Compass", sub: "App info & version",
-      info: {
-        title: "About Compass", icon: "ℹ️",
-        body: "UNILAG Navigator (Compass) — campus navigation, events, and community-contributed locations. Built by Even Tech.",
-      },
+      route: "/about",
     },
     {
       icon: "⚙️", label: "Settings", sub: "Notifications & privacy",
-      info: {
-        title: "Settings", icon: "⚙️",
-        body: "Location-sharing with friends can already be toggled from the Friends tab on Home. A dedicated Settings screen (notification preferences, account deletion, etc.) is a good next addition here.",
-      },
+      route: "/settings",
     },
   ];
 
