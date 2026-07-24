@@ -38,9 +38,14 @@
         }
       },
       "permissions": [
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
-        "CAMERA"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -48,13 +53,12 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-
       [
-    "expo-image-picker",
-    {
-      "photosPermission": "Allow $(PRODUCT_NAME) to access your photos so you can attach a photo to a found item."
-    }
-  ],
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to access your photos so you can attach a photo to a found item."
+        }
+      ],
       "expo-router",
       [
         "expo-splash-screen",
@@ -68,7 +72,8 @@
           }
         }
       ],
-      "expo-font"
+      "expo-font",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
@@ -83,6 +88,9 @@
     "runtimeVersion": {
       "policy": "appVersion"
     },
-    "owner": "even_tomiwa"
+    "owner": "even_tomiwa",
+    "updates": {
+      "url": "https://u.expo.dev/fc378d3f-e858-42b0-bf13-3685ad052243"
+    }
   }
 }
