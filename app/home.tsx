@@ -8,8 +8,11 @@ import { signOut } from "firebase/auth";
 import { get, onValue, ref, remove, set, update } from "firebase/database";
 import {
   Calendar,
+  Car,
   Compass,
   Building2,
+  EyeOff,
+  Footprints,
   History,
   Home,
   MapPin,
@@ -67,7 +70,16 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 // ── Marker components ─────────────────────────────────────────────────────────
 
-const CATEGORIES = ["all", "faculty", "food", "hostel"];
+const CATEGORIES = [
+  "all",
+  "faculty",
+  "hostel",
+  "food",
+  "library",
+  "medical",
+  "sport",
+  "admin",
+];
 
 // ── AR gate ──────────────────────────────────────────────────────────────────
 // AR features almost always depend on native camera/motion modules that
@@ -1625,6 +1637,19 @@ export default function HomeScreen() {
     userLocation,
   ]);
 
+
+
+  const matchingEvents = useMemo(() => {
+    if (search.length === 0) return [];
+    const q = search.toLowerCase();
+    return events.filter(
+      (ev) =>
+        ev.name?.toLowerCase().includes(q) ||
+        ev.locationName?.toLowerCase().includes(q) ||
+        ev.description?.toLowerCase().includes(q),
+    );
+  }, [events, search]);
+
   // Independent of search/category filters — always "closest 5", used only
   // in the focused-empty search state.
   const nearbyPlaces = useMemo(() => {
@@ -1797,7 +1822,11 @@ export default function HomeScreen() {
                 ]}
                 onPress={() => setTravelMode("walking")}
               >
-                <Text style={styles.modeBtnIcon}>🚶</Text>
+                <Footprints
+                  size={16}
+                  color={travelMode === "walking" ? "#1A73E8" : "#555"}
+                  strokeWidth={2.2}
+                />
                 <Text
                   style={[
                     styles.modeBtnText,
@@ -1814,7 +1843,11 @@ export default function HomeScreen() {
                 ]}
                 onPress={() => setTravelMode("driving")}
               >
-                <Text style={styles.modeBtnIcon}>🚗</Text>
+                <Car
+                  size={16}
+                  color={travelMode === "driving" ? "#1A73E8" : "#555"}
+                  strokeWidth={2.2}
+                />
                 <Text
                   style={[
                     styles.modeBtnText,
@@ -1829,8 +1862,54 @@ export default function HomeScreen() {
         )}
         <ScrollView
           ref={stepsScrollRef}
-          style={{ height: 0, overflow: "hidden" }}
-        />
+          style={styles.stepsList}
+          showsVerticalScrollIndicator={false}
+        >
+          {(directions.steps as any[]).map((step, i) => {
+            const isDone = navigating && i < activeStep;
+            const isActive = navigating && i === activeStep;
+            return (
+              <View
+                key={i}
+                style={[
+                  styles.stepRow,
+                  isActive && styles.stepRowActive,
+                  isDone && styles.stepRowDone,
+                ]}
+              >
+                <View
+                  style={[
+                    styles.stepBullet,
+                    isActive && styles.stepBulletActive,
+                    isDone && styles.stepBulletDone,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.stepBulletText,
+                      (isActive || isDone) && styles.stepBulletTextLight,
+                    ]}
+                  >
+                    {getDirectionLabel(step.maneuver)}
+                  </Text>
+                </View>
+                <View style={styles.stepBody}>
+                  <Text
+                    style={[
+                      styles.stepInstruction,
+                      isActive && styles.stepInstructionActive,
+                      isDone && styles.stepInstructionDone,
+                    ]}
+                  >
+                    {stripHtml(step.instruction)}
+                  </Text>
+                  <Text style={styles.stepMeta}>{step.distance}</Text>
+                </View>
+                {isActive && <View style={styles.stepActivePip} />}
+              </View>
+            );
+          })}
+        </ScrollView>
       </>
     );
   }
@@ -1844,12 +1923,19 @@ export default function HomeScreen() {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
       >
-        <Text style={styles.tabTitle}>👥 Friends</Text>
+        <View style={styles.tabTitleRow}>
+          <Users size={16} color="#1a5c38" strokeWidth={2.4} />
+          <Text style={styles.tabTitleText}>Friends</Text>
+        </View>
         <View style={styles.sharingCard}>
           <View style={styles.sharingLeft}>
-            <Text style={styles.sharingIcon}>
-              {sharingLocation ? "📍" : "🙈"}
-            </Text>
+            <View style={styles.sharingIconBox}>
+              {sharingLocation ? (
+                <MapPin size={18} color="#1a5c38" strokeWidth={2.2} />
+              ) : (
+                <EyeOff size={18} color="#1a5c38" strokeWidth={2.2} />
+              )}
+            </View>
             <View>
               <Text style={styles.sharingTitle}>Share My Location</Text>
               <Text style={styles.sharingSub}>
@@ -2027,7 +2113,7 @@ export default function HomeScreen() {
                 <View style={styles.friendInfo}>
                   <Text style={styles.friendName}>{f.name}</Text>
                   <Text style={styles.friendEmail}>
-                    {loc ? "📍 Sharing location" : "🙈 Location hidden"}
+                    {loc ? "Sharing location" : "Location hidden"}
                   </Text>
                 </View>
                 {loc && (
@@ -2121,7 +2207,10 @@ export default function HomeScreen() {
   function renderEventsTab() {
     return (
       <>
-        <Text style={styles.tabTitle}>🗓️ Campus Events ({events.length})</Text>
+        <View style={styles.tabTitleRow}>
+          <Calendar size={16} color="#1a5c38" strokeWidth={2.4} />
+          <Text style={styles.tabTitleText}>Campus Events ({events.length})</Text>
+        </View>
         <ScrollView
           style={styles.buildingsList}
           showsVerticalScrollIndicator={false}
@@ -2162,7 +2251,10 @@ export default function HomeScreen() {
                     {ev.date}
                     {ev.time ? ` · ${ev.time}` : ""}
                   </Text>
-                  <Text style={styles.eventLoc}>📍 {ev.locationName}</Text>
+                  <View style={styles.eventLocRow}>
+                    <MapPin size={11} color="#888" strokeWidth={2.2} />
+                    <Text style={styles.eventLoc}>{ev.locationName}</Text>
+                  </View>
                   {ev.description ? (
                     <Text style={styles.eventDesc} numberOfLines={2}>
                       {ev.description}
@@ -2346,6 +2438,43 @@ export default function HomeScreen() {
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="on-drag"
             >
+              {matchingEvents.length > 0 && (
+                <>
+                  <Text style={styles.searchSectionLabel}>Events</Text>
+                  {matchingEvents.map((ev) => (
+                    <TouchableOpacity
+                      key={`event-${ev.id}`}
+                      style={styles.resultItem}
+                      onPress={() => {
+                        setSearch("");
+                        Keyboard.dismiss();
+                        mapRef.current?.animateToRegion(
+                          {
+                            latitude: ev.latitude,
+                            longitude: ev.longitude,
+                            latitudeDelta: 0.003,
+                            longitudeDelta: 0.003,
+                          },
+                          600,
+                        );
+                        setSelectedEvent(ev);
+                      }}
+                    >
+                      <View style={[styles.resultIconBox, { backgroundColor: "#fef3c7" }]}>
+                        <Calendar size={16} color="#d97706" strokeWidth={2.2} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.resultName}>{ev.name}</Text>
+                        <Text style={styles.resultDesc}>
+                          {ev.date}
+                          {ev.time ? ` · ${ev.time}` : ""} · {ev.locationName}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                  <Text style={styles.searchSectionLabel}>Places</Text>
+                </>
+              )}
               {visibleBuildings.map((b) => (
                 <TouchableOpacity
                   key={b.id}
@@ -2411,8 +2540,10 @@ export default function HomeScreen() {
                   </View>
                 </TouchableOpacity>
               ))}
-              {visibleBuildings.length === 0 && (
-                <Text style={styles.emptyText}>No locations found.</Text>
+              {visibleBuildings.length === 0 && matchingEvents.length === 0 && (
+                <Text style={styles.emptyText}>
+                  No matches for "{search}". Try a category chip instead.
+                </Text>
               )}
             </ScrollView>
           ) : null}
@@ -2420,19 +2551,61 @@ export default function HomeScreen() {
 
         {/* BUILDINGS TAB */}
         <View style={{ display: activeTab === "buildings" ? "flex" : "none" }}>
-          <Text style={styles.tabTitle}>
-            📍{" "}
-            {filterCat === "all"
-              ? "All Locations"
-              : `${filterCat.charAt(0).toUpperCase()}${filterCat.slice(1)} Locations`}{" "}
-            (
-            {filterCat === "all"
-              ? communityLoaded
-                ? BUILDINGS.length + communityLocations.length
-                : BUILDINGS.length
-              : BUILDINGS.filter((b) => b.category === filterCat).length}
-            )
-          </Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.filterRow}
+            keyboardShouldPersistTaps="handled"
+          >
+            {CATEGORIES.map((cat) => {
+              const colors = CATEGORY_COLORS[cat] || { pin: "#1a5c38", dot: "#e8f5ee" };
+              const active = filterCat === cat;
+              const ChipIcon = cat === "all" ? Compass : CATEGORY_ICON[cat] || Building2;
+              return (
+                <TouchableOpacity
+                  key={`places-chip-${cat}`}
+                  style={[
+                    styles.filterChip,
+                    active && {
+                      backgroundColor: cat === "all" ? "#1a5c38" : colors.pin,
+                      borderColor: cat === "all" ? "#1a5c38" : colors.pin,
+                    },
+                  ]}
+                  onPress={() => setFilterCat(cat)}
+                >
+                  <ChipIcon
+                    size={14}
+                    color={active ? "#fff" : colors.pin}
+                    strokeWidth={2.2}
+                    style={{ marginRight: 5 }}
+                  />
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      active && styles.filterChipTextActive,
+                    ]}
+                  >
+                    {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+          <View style={styles.tabTitleRow}>
+            <MapPin size={16} color="#1a5c38" strokeWidth={2.4} />
+            <Text style={styles.tabTitleText}>
+              {filterCat === "all"
+                ? "All Locations"
+                : `${filterCat.charAt(0).toUpperCase()}${filterCat.slice(1)} Locations`}{" "}
+              (
+              {filterCat === "all"
+                ? communityLoaded
+                  ? BUILDINGS.length + communityLocations.length
+                  : BUILDINGS.length
+                : BUILDINGS.filter((b) => b.category === filterCat).length}
+              )
+            </Text>
+          </View>
           <ScrollView
             style={styles.buildingsList}
             showsVerticalScrollIndicator={false}
@@ -2462,14 +2635,19 @@ export default function HomeScreen() {
                     );
                   }}
                 >
-                  <View
-                    style={[
-                      styles.buildingIconBox,
-                      { backgroundColor: colors.dot },
-                    ]}
-                  >
-                    <Text style={styles.buildingIcon}>{b.icon}</Text>
-                  </View>
+                  {(() => {
+                    const BIcon = CATEGORY_ICON[b.category] || Building2;
+                    return (
+                      <View
+                        style={[
+                          styles.buildingIconBox,
+                          { backgroundColor: colors.dot },
+                        ]}
+                      >
+                        <BIcon size={18} color={colors.pin} strokeWidth={2.2} />
+                      </View>
+                    );
+                  })()}
                   <View style={styles.buildingInfo}>
                     <Text style={styles.buildingName}>{b.name}</Text>
                     <Text style={styles.buildingDesc}>{b.description}</Text>
@@ -3474,6 +3652,17 @@ const styles = StyleSheet.create({
     color: "#333",
     marginBottom: 12,
   },
+  tabTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 12,
+  },
+  tabTitleText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#333",
+  },
   buildingsList: { maxHeight: 360, marginBottom: 8 },
   buildingItem: {
     flexDirection: "row",
@@ -3514,7 +3703,14 @@ const styles = StyleSheet.create({
     borderColor: "#c8e6d4",
   },
   sharingLeft: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
-  sharingIcon: { fontSize: 22 },
+  sharingIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: "#e8f5ee",
+    justifyContent: "center",
+    alignItems: "center",
+  },
   sharingTitle: { fontSize: 14, fontWeight: "700", color: "#1a5c38" },
   sharingSub: { fontSize: 12, color: "#4a8c63", marginTop: 2 },
   addFriendRow: {
@@ -3691,7 +3887,8 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginTop: 2,
   },
-  eventLoc: { fontSize: 12, color: "#888", marginTop: 2 },
+  eventLocRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 },
+  eventLoc: { fontSize: 12, color: "#888" },
   eventDesc: { fontSize: 12, color: "#aaa", marginTop: 3 },
   dirArrow: { justifyContent: "center", paddingLeft: 8 },
   dirArrowText: { fontSize: 22, color: "#ccc", fontWeight: "300" },
