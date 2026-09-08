@@ -7,10 +7,10 @@ import * as Speech from "expo-speech";
 import { signOut } from "firebase/auth";
 import { get, onValue, ref, remove, set, update } from "firebase/database";
 import {
+  Building2,
   Calendar,
   Car,
   Compass,
-  Building2,
   EyeOff,
   Footprints,
   History,
@@ -43,9 +43,9 @@ import { Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
 import CompassPointer from "../components/CompassPointer";
 import {
   BuildingMarker,
+  CATEGORY_ICON,
   FriendMarker,
   mStyles,
-  CATEGORY_ICON,
 } from "../components/mapMarkers";
 import { SelectedLocationCard } from "../components/SelectedLocationCard";
 import { TabSkeleton } from "../components/tabSkele";
@@ -1199,6 +1199,11 @@ export default function HomeScreen() {
   function getUserDisplayName(v: any): string {
     return v.fullName || v.name || v.displayName || v.username || "";
   }
+  function formatFriendDistance(metres: number): string {
+    if (metres < 50) return "Right nearby";
+    if (metres < 1000) return `${Math.round(metres)}m away`;
+    return `${(metres / 1000).toFixed(1)}km away`;
+  }
   function getUserSearchTokens(v: any): string[] {
     return [v.fullName, v.name, v.displayName, v.username, v.email]
       .filter(Boolean)
@@ -1312,7 +1317,10 @@ export default function HomeScreen() {
       description: building.description,
       icon: building.icon,
     };
-    const next = [entry, ...recentSearches.filter((r) => r.id !== entry.id)].slice(0, 5);
+    const next = [
+      entry,
+      ...recentSearches.filter((r) => r.id !== entry.id),
+    ].slice(0, 5);
     setRecentSearches(next);
     AsyncStorage.setItem("recentSearches", JSON.stringify(next));
   }
@@ -1637,8 +1645,6 @@ export default function HomeScreen() {
     userLocation,
   ]);
 
-
-
   const matchingEvents = useMemo(() => {
     if (search.length === 0) return [];
     const q = search.toLowerCase();
@@ -1657,8 +1663,18 @@ export default function HomeScreen() {
     return [...BUILDINGS]
       .sort(
         (a, b) =>
-          haversineMetres(userLocation.latitude, userLocation.longitude, a.latitude, a.longitude) -
-          haversineMetres(userLocation.latitude, userLocation.longitude, b.latitude, b.longitude),
+          haversineMetres(
+            userLocation.latitude,
+            userLocation.longitude,
+            a.latitude,
+            a.longitude,
+          ) -
+          haversineMetres(
+            userLocation.latitude,
+            userLocation.longitude,
+            b.latitude,
+            b.longitude,
+          ),
       )
       .slice(0, 5);
   }, [userLocation]);
@@ -2082,9 +2098,12 @@ export default function HomeScreen() {
           </>
         )}
 
-        <Text style={styles.sectionLabel}>
-          🟢 My Friends ({friends.length})
-        </Text>
+        <View style={styles.tabTitleRow}>
+          <View style={styles.onlineDot} />
+          <Text style={styles.sectionLabelText}>
+            My Friends ({friends.length})
+          </Text>
+        </View>
         {!friendsLoaded ? (
           <TabSkeleton rows={3} />
         ) : friends.length === 0 ? (
@@ -2092,112 +2111,148 @@ export default function HomeScreen() {
             No friends yet. Search by username above!
           </Text>
         ) : (
-          friends.map((f) => {
-            const loc = friendLocations.find((fl) => fl.uid === f.uid);
-            return (
-              <View key={f.uid} style={styles.friendCard}>
-                <View style={styles.friendAvatar}>
-                  {friendPhotos[f.uid] ? (
-                    <Image
-                      source={{
-                        uri: `data:image/jpeg;base64,${friendPhotos[f.uid]}`,
-                      }}
-                      style={styles.friendAvatarImg}
-                    />
-                  ) : (
-                    <Text style={styles.friendAvatarText}>
-                      {(f.name || "?")[0].toUpperCase()}
+          [...friends]
+            .sort((a, b) => {
+              const locA = friendLocations.find((fl) => fl.uid === a.uid);
+              const locB = friendLocations.find((fl) => fl.uid === b.uid);
+              if (locA && !locB) return -1;
+              if (!locA && locB) return 1;
+              if (!locA || !locB || !userLocation) return 0;
+              return (
+                haversineMetres(
+                  userLocation.latitude,
+                  userLocation.longitude,
+                  locA.latitude,
+                  locA.longitude,
+                ) -
+                haversineMetres(
+                  userLocation.latitude,
+                  userLocation.longitude,
+                  locB.latitude,
+                  locB.longitude,
+                )
+              );
+            })
+            .map((f) => {
+              const loc = friendLocations.find((fl) => fl.uid === f.uid);
+              return (
+                <View key={f.uid} style={styles.friendCard}>
+                  <View style={styles.friendAvatar}>
+                    {friendPhotos[f.uid] ? (
+                      <Image
+                        source={{
+                          uri: `data:image/jpeg;base64,${friendPhotos[f.uid]}`,
+                        }}
+                        style={styles.friendAvatarImg}
+                      />
+                    ) : (
+                      <Text style={styles.friendAvatarText}>
+                        {(f.name || "?")[0].toUpperCase()}
+                      </Text>
+                    )}
+                  </View>
+                  <View style={styles.friendInfo}>
+                    <Text style={styles.friendName}>{f.name}</Text>
+                    <Text style={styles.friendEmail}>
+                      {loc && userLocation
+                        ? formatFriendDistance(
+                            haversineMetres(
+                              userLocation.latitude,
+                              userLocation.longitude,
+                              loc.latitude,
+                              loc.longitude,
+                            ),
+                          )
+                        : loc
+                          ? "Sharing location"
+                          : "Location hidden"}
                     </Text>
-                  )}
-                </View>
-                <View style={styles.friendInfo}>
-                  <Text style={styles.friendName}>{f.name}</Text>
-                  <Text style={styles.friendEmail}>
-                    {loc ? "Sharing location" : "Location hidden"}
-                  </Text>
-                </View>
-                {loc && (
-                  <TouchableOpacity
-                    style={styles.locateBtn}
-                    onPress={async () => {
-                      const dest = {
-                        name: f.name,
-                        latitude: loc.latitude,
-                        longitude: loc.longitude,
-                        icon: "👤",
-                        description: "Friend's live location",
-                        category: "friend",
-                      };
-                      setSelected(dest);
-                      setDirections(null);
-                      setActiveStep(0);
-                      setNavigating(false);
-                      setActiveTab("home");
+                  </View>
+                  {loc && (
+                    <TouchableOpacity
+                      style={styles.locateBtn}
+                      onPress={async () => {
+                        const dest = {
+                          name: f.name,
+                          latitude: loc.latitude,
+                          longitude: loc.longitude,
+                          icon: "👤",
+                          description: "Friend's live location",
+                          category: "friend",
+                        };
+                        setSelected(dest);
+                        setDirections(null);
+                        setActiveStep(0);
+                        setNavigating(false);
+                        setActiveTab("home");
 
-                      const location = userLocationRef.current;
-                      if (!location) {
-                        mapRef.current?.animateToRegion(
+                        const location = userLocationRef.current;
+                        if (!location) {
+                          mapRef.current?.animateToRegion(
+                            {
+                              latitude: loc.latitude,
+                              longitude: loc.longitude,
+                              latitudeDelta: 0.005,
+                              longitudeDelta: 0.005,
+                            },
+                            800,
+                          );
+                          return;
+                        }
+
+                        setLoadingDirs(true);
+                        const result = await fetchDirections(
+                          location.latitude,
+                          location.longitude,
+                          loc.latitude,
+                          loc.longitude,
+                          travelMode,
+                        );
+                        setLoadingDirs(false);
+
+                        if (!result) {
+                          showAlert(
+                            "No route found",
+                            "Could not calculate a route to your friend.",
+                            "🗺️",
+                          );
+                          return;
+                        }
+
+                        setDirections(result);
+                        mapRef.current?.fitToCoordinates(
+                          [
+                            location,
+                            ...result.polylinePoints,
+                            {
+                              latitude: loc.latitude,
+                              longitude: loc.longitude,
+                            },
+                          ],
                           {
-                            latitude: loc.latitude,
-                            longitude: loc.longitude,
-                            latitudeDelta: 0.005,
-                            longitudeDelta: 0.005,
+                            edgePadding: {
+                              top: 120,
+                              right: 40,
+                              bottom: 380,
+                              left: 40,
+                            },
+                            animated: true,
                           },
-                          800,
                         );
-                        return;
-                      }
-
-                      setLoadingDirs(true);
-                      const result = await fetchDirections(
-                        location.latitude,
-                        location.longitude,
-                        loc.latitude,
-                        loc.longitude,
-                        travelMode,
-                      );
-                      setLoadingDirs(false);
-
-                      if (!result) {
-                        showAlert(
-                          "No route found",
-                          "Could not calculate a route to your friend.",
-                          "🗺️",
-                        );
-                        return;
-                      }
-
-                      setDirections(result);
-                      mapRef.current?.fitToCoordinates(
-                        [
-                          location,
-                          ...result.polylinePoints,
-                          { latitude: loc.latitude, longitude: loc.longitude },
-                        ],
-                        {
-                          edgePadding: {
-                            top: 120,
-                            right: 40,
-                            bottom: 380,
-                            left: 40,
-                          },
-                          animated: true,
-                        },
-                      );
-                    }}
+                      }}
+                    >
+                      <Text style={styles.locateBtnText}>📍</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity
+                    style={styles.removeBtn}
+                    onPress={() => handleRemoveFriend(f.uid, f.name)}
                   >
-                    <Text style={styles.locateBtnText}>📍</Text>
+                    <Text style={styles.removeBtnText}>✕</Text>
                   </TouchableOpacity>
-                )}
-                <TouchableOpacity
-                  style={styles.removeBtn}
-                  onPress={() => handleRemoveFriend(f.uid, f.name)}
-                >
-                  <Text style={styles.removeBtnText}>✕</Text>
-                </TouchableOpacity>
-              </View>
-            );
-          })
+                </View>
+              );
+            })
         )}
       </ScrollView>
     );
@@ -2209,7 +2264,9 @@ export default function HomeScreen() {
       <>
         <View style={styles.tabTitleRow}>
           <Calendar size={16} color="#1a5c38" strokeWidth={2.4} />
-          <Text style={styles.tabTitleText}>Campus Events ({events.length})</Text>
+          <Text style={styles.tabTitleText}>
+            Campus Events ({events.length})
+          </Text>
         </View>
         <ScrollView
           style={styles.buildingsList}
@@ -2377,7 +2434,7 @@ export default function HomeScreen() {
             })}
           </ScrollView>
 
-                 {searchFocused && search.length === 0 ? (
+          {searchFocused && search.length === 0 ? (
             <View style={styles.searchFocusedPanel}>
               {recentSearches.length > 0 && (
                 <>
@@ -2391,7 +2448,12 @@ export default function HomeScreen() {
                       <View
                         style={[
                           styles.resultIconBox,
-                          { backgroundColor: (CATEGORY_COLORS[b.category] || CATEGORY_COLORS.admin).dot },
+                          {
+                            backgroundColor: (
+                              CATEGORY_COLORS[b.category] ||
+                              CATEGORY_COLORS.admin
+                            ).dot,
+                          },
                         ]}
                       >
                         <History size={16} color="#64748B" strokeWidth={2.2} />
@@ -2409,15 +2471,25 @@ export default function HomeScreen() {
                   <Text style={styles.searchSectionLabel}>Nearby</Text>
                   {nearbyPlaces.map((b) => {
                     const NearbyIcon = CATEGORY_ICON[b.category] || Building2;
-                    const nearbyColors = CATEGORY_COLORS[b.category] || CATEGORY_COLORS.admin;
+                    const nearbyColors =
+                      CATEGORY_COLORS[b.category] || CATEGORY_COLORS.admin;
                     return (
                       <TouchableOpacity
                         key={`nearby-${b.id}`}
                         style={styles.resultItem}
                         onPress={() => handleSelectBuilding(b)}
                       >
-                        <View style={[styles.resultIconBox, { backgroundColor: nearbyColors.dot }]}>
-                          <NearbyIcon size={16} color={nearbyColors.pin} strokeWidth={2.2} />
+                        <View
+                          style={[
+                            styles.resultIconBox,
+                            { backgroundColor: nearbyColors.dot },
+                          ]}
+                        >
+                          <NearbyIcon
+                            size={16}
+                            color={nearbyColors.pin}
+                            strokeWidth={2.2}
+                          />
                         </View>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.resultName}>{b.name}</Text>
@@ -2429,7 +2501,9 @@ export default function HomeScreen() {
                 </>
               )}
               {recentSearches.length === 0 && nearbyPlaces.length === 0 && (
-                <Text style={styles.emptyText}>Start typing to search campus locations.</Text>
+                <Text style={styles.emptyText}>
+                  Start typing to search campus locations.
+                </Text>
               )}
             </View>
           ) : search.length > 0 ? (
@@ -2460,7 +2534,12 @@ export default function HomeScreen() {
                         setSelectedEvent(ev);
                       }}
                     >
-                      <View style={[styles.resultIconBox, { backgroundColor: "#fef3c7" }]}>
+                      <View
+                        style={[
+                          styles.resultIconBox,
+                          { backgroundColor: "#fef3c7" },
+                        ]}
+                      >
                         <Calendar size={16} color="#d97706" strokeWidth={2.2} />
                       </View>
                       <View style={{ flex: 1 }}>
@@ -2558,9 +2637,13 @@ export default function HomeScreen() {
             keyboardShouldPersistTaps="handled"
           >
             {CATEGORIES.map((cat) => {
-              const colors = CATEGORY_COLORS[cat] || { pin: "#1a5c38", dot: "#e8f5ee" };
+              const colors = CATEGORY_COLORS[cat] || {
+                pin: "#1a5c38",
+                dot: "#e8f5ee",
+              };
               const active = filterCat === cat;
-              const ChipIcon = cat === "all" ? Compass : CATEGORY_ICON[cat] || Building2;
+              const ChipIcon =
+                cat === "all" ? Compass : CATEGORY_ICON[cat] || Building2;
               return (
                 <TouchableOpacity
                   key={`places-chip-${cat}`}
@@ -2931,7 +3014,7 @@ export default function HomeScreen() {
           <View
             style={{
               position: "absolute",
-              bottom: Platform.OS === "ios" ? 200 : 175,
+              bottom: Platform.OS === "ios" ? 360 : 335,
               left: 0,
               right: 0,
             }}
@@ -3735,6 +3818,17 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginTop: 4,
   },
+  sectionLabelText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#888",
+  },
+  onlineDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#1a5c38",
+  },
   requestCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -3887,7 +3981,12 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginTop: 2,
   },
-  eventLocRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 },
+  eventLocRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 2,
+  },
   eventLoc: { fontSize: 12, color: "#888" },
   eventDesc: { fontSize: 12, color: "#aaa", marginTop: 3 },
   dirArrow: { justifyContent: "center", paddingLeft: 8 },
