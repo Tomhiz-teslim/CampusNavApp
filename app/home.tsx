@@ -6,6 +6,18 @@ import { router, useLocalSearchParams } from "expo-router";
 import * as Speech from "expo-speech";
 import { signOut } from "firebase/auth";
 import { get, onValue, ref, remove, set, update } from "firebase/database";
+import {
+  Calendar,
+  Compass,
+  Building2,
+  History,
+  Home,
+  MapPin,
+  Search,
+  User,
+  Users,
+  X,
+} from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -13,7 +25,6 @@ import {
   Dimensions,
   Image,
   Keyboard,
-  KeyboardAvoidingView,
   Platform,
   ScrollView,
   Share,
@@ -31,6 +42,7 @@ import {
   BuildingMarker,
   FriendMarker,
   mStyles,
+  CATEGORY_ICON,
 } from "../components/mapMarkers";
 import { SelectedLocationCard } from "../components/SelectedLocationCard";
 import { TabSkeleton } from "../components/tabSkele";
@@ -55,26 +67,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 // ── Marker components ─────────────────────────────────────────────────────────
 
-const CATEGORIES = [
-  "all",
-  "faculty",
-  "hostel",
-  "admin",
-  "food",
-  "library",
-  "medical",
-  "sport",
-];
-const CATEGORY_ICONS: Record<string, string> = {
-  all: "🗺️",
-  faculty: "🎓",
-  hostel: "🏠",
-  admin: "🏛️",
-  food: "🍽️",
-  library: "📚",
-  medical: "🏥",
-  sport: "⚽",
-};
+const CATEGORIES = ["all", "faculty", "food", "hostel"];
 
 // ── AR gate ──────────────────────────────────────────────────────────────────
 // AR features almost always depend on native camera/motion modules that
@@ -176,9 +169,12 @@ function CommunityLocationMarker({
       tracksViewChanges={tracks}
     >
       <View
-        style={[mStyles.pin, { backgroundColor: "#7c3aed", borderColor: "#ede9fe" }]}
+        style={[
+          mStyles.pin,
+          { backgroundColor: "#7c3aed", borderColor: "#ede9fe" },
+        ]}
       >
-        <Text style={mStyles.emoji}>{loc.icon || "📍"}</Text>
+        <MapPin size={14} color="#fff" strokeWidth={2.4} />
       </View>
       <View style={[mStyles.pinTail, { borderTopColor: "#7c3aed" }]} />
     </Marker>
@@ -189,6 +185,8 @@ export default function HomeScreen() {
   const [userName, setUserName] = useState("");
   const [userId, setUserId] = useState("");
   const [search, setSearch] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<any[]>([]);
   const [selected, setSelected] = useState<any>(null);
   const [activeTab, setActiveTab] = useState("home");
   const [filterCat, setFilterCat] = useState("all");
@@ -347,8 +345,10 @@ export default function HomeScreen() {
   }
 
   useEffect(() => {
-    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
     const showSub = Keyboard.addListener(showEvent, (e) => {
       setKeyboardHeight(e.endCoordinates?.height ?? 0);
     });
@@ -1289,6 +1289,39 @@ export default function HomeScreen() {
     );
   }
 
+  // ── Search: recent searches persistence ────────────────────────────────────
+  async function addRecentSearch(building: any) {
+    const entry = {
+      id: building.id,
+      name: building.name,
+      category: building.category,
+      latitude: building.latitude,
+      longitude: building.longitude,
+      description: building.description,
+      icon: building.icon,
+    };
+    const next = [entry, ...recentSearches.filter((r) => r.id !== entry.id)].slice(0, 5);
+    setRecentSearches(next);
+    AsyncStorage.setItem("recentSearches", JSON.stringify(next));
+  }
+
+  function handleSelectBuilding(b: any) {
+    addRecentSearch(b);
+    setSelected(b);
+    setSearch("");
+    setSearchFocused(false);
+    Keyboard.dismiss();
+    mapRef.current?.animateToRegion(
+      {
+        latitude: b.latitude,
+        longitude: b.longitude,
+        latitudeDelta: 0.005,
+        longitudeDelta: 0.005,
+      },
+      600,
+    );
+  }
+
   // ── Directions actions ─────────────────────────────────────────────────────
   async function handleGetDirections() {
     if (!selected) return;
@@ -1383,6 +1416,16 @@ export default function HomeScreen() {
   useEffect(() => {
     AsyncStorage.getItem("travelMode").then((saved) => {
       if (saved === "walking" || saved === "driving") setTravelMode(saved);
+    });
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.getItem("recentSearches").then((saved) => {
+      if (saved) {
+        try {
+          setRecentSearches(JSON.parse(saved));
+        } catch {}
+      }
     });
   }, []);
 
@@ -1581,6 +1624,19 @@ export default function HomeScreen() {
     filterCat,
     userLocation,
   ]);
+
+  // Independent of search/category filters — always "closest 5", used only
+  // in the focused-empty search state.
+  const nearbyPlaces = useMemo(() => {
+    if (!userLocation) return [];
+    return [...BUILDINGS]
+      .sort(
+        (a, b) =>
+          haversineMetres(userLocation.latitude, userLocation.longitude, a.latitude, a.longitude) -
+          haversineMetres(userLocation.latitude, userLocation.longitude, b.latitude, b.longitude),
+      )
+      .slice(0, 5);
+  }, [userLocation]);
 
   // ── Google Maps style top instruction banner ───────────────────────────────
   function renderNavBanner() {
@@ -2098,7 +2154,7 @@ export default function HomeScreen() {
                 }}
               >
                 <View style={styles.eventIconBox}>
-                  <Text style={{ fontSize: 22 }}>{ev.icon || "📌"}</Text>
+                  <Calendar size={20} color="#d97706" strokeWidth={2.2} />
                 </View>
                 <View style={styles.eventInfo}>
                   <Text style={styles.eventName}>{ev.name}</Text>
@@ -2132,22 +2188,26 @@ export default function HomeScreen() {
       <>
         <View style={{ display: activeTab === "home" ? "flex" : "none" }}>
           <View style={styles.searchBar}>
-            <Text style={styles.searchIcon}>🔍</Text>
+            <Search size={18} color="#64748B" style={{ marginRight: 8 }} />
             <TextInput
               style={styles.searchInput}
               placeholder="Search campus locations…"
               placeholderTextColor="#999"
               value={search}
+              onFocus={() => setSearchFocused(true)}
               onChangeText={(text) => {
                 setSearch(text);
                 if (text.length > 0) setFilterCat("all");
               }}
               returnKeyType="search"
-              onSubmitEditing={Keyboard.dismiss}
+              onSubmitEditing={() => {
+                setSearchFocused(false);
+                Keyboard.dismiss();
+              }}
             />
             {search.length > 0 && (
               <TouchableOpacity onPress={() => setSearch("")}>
-                <Text style={styles.clearText}>✕</Text>
+                <X size={18} color="#64748B" style={{ paddingHorizontal: 4 }} />
               </TouchableOpacity>
             )}
           </View>
@@ -2164,6 +2224,8 @@ export default function HomeScreen() {
                 dot: "#e8f5ee",
               };
               const active = filterCat === cat;
+              const ChipIcon =
+                cat === "all" ? Compass : CATEGORY_ICON[cat] || Building2;
               return (
                 <TouchableOpacity
                   key={cat}
@@ -2204,9 +2266,12 @@ export default function HomeScreen() {
                     }
                   }}
                 >
-                  <Text style={styles.filterChipIcon}>
-                    {CATEGORY_ICONS[cat]}
-                  </Text>
+                  <ChipIcon
+                    size={14}
+                    color={active ? "#fff" : colors.pin}
+                    strokeWidth={2.2}
+                    style={{ marginRight: 5 }}
+                  />
                   <Text
                     style={[
                       styles.filterChipText,
@@ -2220,7 +2285,62 @@ export default function HomeScreen() {
             })}
           </ScrollView>
 
-          {search.length > 0 ? (
+                 {searchFocused && search.length === 0 ? (
+            <View style={styles.searchFocusedPanel}>
+              {recentSearches.length > 0 && (
+                <>
+                  <Text style={styles.searchSectionLabel}>Recent</Text>
+                  {recentSearches.map((b) => (
+                    <TouchableOpacity
+                      key={`recent-${b.id}`}
+                      style={styles.resultItem}
+                      onPress={() => handleSelectBuilding(b)}
+                    >
+                      <View
+                        style={[
+                          styles.resultIconBox,
+                          { backgroundColor: (CATEGORY_COLORS[b.category] || CATEGORY_COLORS.admin).dot },
+                        ]}
+                      >
+                        <History size={16} color="#64748B" strokeWidth={2.2} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.resultName}>{b.name}</Text>
+                        <Text style={styles.resultDesc}>{b.description}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </>
+              )}
+              {nearbyPlaces.length > 0 && (
+                <>
+                  <Text style={styles.searchSectionLabel}>Nearby</Text>
+                  {nearbyPlaces.map((b) => {
+                    const NearbyIcon = CATEGORY_ICON[b.category] || Building2;
+                    const nearbyColors = CATEGORY_COLORS[b.category] || CATEGORY_COLORS.admin;
+                    return (
+                      <TouchableOpacity
+                        key={`nearby-${b.id}`}
+                        style={styles.resultItem}
+                        onPress={() => handleSelectBuilding(b)}
+                      >
+                        <View style={[styles.resultIconBox, { backgroundColor: nearbyColors.dot }]}>
+                          <NearbyIcon size={16} color={nearbyColors.pin} strokeWidth={2.2} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.resultName}>{b.name}</Text>
+                          <Text style={styles.resultDesc}>{b.description}</Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </>
+              )}
+              {recentSearches.length === 0 && nearbyPlaces.length === 0 && (
+                <Text style={styles.emptyText}>Start typing to search campus locations.</Text>
+              )}
+            </View>
+          ) : search.length > 0 ? (
             <ScrollView
               style={styles.searchResults}
               keyboardShouldPersistTaps="handled"
@@ -2230,22 +2350,30 @@ export default function HomeScreen() {
                 <TouchableOpacity
                   key={b.id}
                   style={styles.resultItem}
-                  onPress={() => {
-                    setSelected(b);
-                    setSearch("");
-                    Keyboard.dismiss();
-                    mapRef.current?.animateToRegion(
-                      {
-                        latitude: b.latitude,
-                        longitude: b.longitude,
-                        latitudeDelta: 0.005,
-                        longitudeDelta: 0.005,
-                      },
-                      600,
-                    );
-                  }}
+                  onPress={() => handleSelectBuilding(b)}
                 >
-                  <Text style={styles.resultIcon}>{b.icon}</Text>
+                  {(() => {
+                    const ResultIcon =
+                      b.category === "other"
+                        ? MapPin
+                        : CATEGORY_ICON[b.category] || Building2;
+                    const resultColors =
+                      CATEGORY_COLORS[b.category] || CATEGORY_COLORS.admin;
+                    return (
+                      <View
+                        style={[
+                          styles.resultIconBox,
+                          { backgroundColor: resultColors.dot },
+                        ]}
+                      >
+                        <ResultIcon
+                          size={16}
+                          color={resultColors.pin}
+                          strokeWidth={2.2}
+                        />
+                      </View>
+                    );
+                  })()}
                   <View style={{ flex: 1 }}>
                     <Text style={styles.resultName}>{b.name}</Text>
                     <Text style={styles.resultDesc}>{b.description}</Text>
@@ -2287,24 +2415,7 @@ export default function HomeScreen() {
                 <Text style={styles.emptyText}>No locations found.</Text>
               )}
             </ScrollView>
-          ) : communityLoaded ? (
-            <Text style={styles.locationCount}>
-              {filterCat === "all"
-                ? `${BUILDINGS.length + communityLocations.length} locations on campus`
-                : `${visibleBuildings.length} ${filterCat} location${visibleBuildings.length !== 1 ? "s" : ""}`}
-            </Text>
-          ) : (
-            <View style={{ alignItems: "center", marginVertical: 6 }}>
-              <View
-                style={{
-                  height: 13,
-                  width: 160,
-                  backgroundColor: "#e8e8e8",
-                  borderRadius: 6,
-                }}
-              />
-            </View>
-          )}
+          ) : null}
         </View>
 
         {/* BUILDINGS TAB */}
@@ -2457,6 +2568,7 @@ export default function HomeScreen() {
         rotateEnabled={true}
         pitchEnabled={true}
         showsBuildings={true}
+        showsPointsOfInterest={false}
         initialRegion={{
           latitude: 6.517,
           longitude: 3.393,
@@ -2465,6 +2577,10 @@ export default function HomeScreen() {
         }}
         onPanDrag={() => {
           if (navigating) setFollowUser(false);
+          if (searchFocused) {
+            setSearchFocused(false);
+            Keyboard.dismiss();
+          }
         }}
         customMapStyle={[]}
         // ── Clustering (react-native-map-clustering) ──
@@ -2475,8 +2591,8 @@ export default function HomeScreen() {
         clusteringEnabled={!navigating}
         clusterColor="#1a5c38"
         clusterTextColor="#fff"
-        radius={60}
-        minPoints={3}
+        radius={100}
+        minPoints={2}
         spiralEnabled={false}
         preserveClusterPressBehavior={false}
         edgePadding={{ top: 120, left: 40, right: 40, bottom: 380 }}
@@ -2553,6 +2669,7 @@ export default function HomeScreen() {
           <BuildingMarker
             key={building.id}
             building={building}
+            isSelected={selected?.id === building.id}
             onPress={() => {
               setSelected(building);
               setDirections(null);
@@ -2598,7 +2715,7 @@ export default function HomeScreen() {
                   { backgroundColor: "#d97706", borderColor: "#fef3c7" },
                 ]}
               >
-                <Text style={mStyles.emoji}>{ev.icon || "📌"}</Text>
+                <Calendar size={14} color="#fff" strokeWidth={2.4} />
               </View>
               <View style={[mStyles.pinTail, { borderTopColor: "#d97706" }]} />
             </Marker>
@@ -2624,7 +2741,6 @@ export default function HomeScreen() {
       </MapView>
 
       {/* ── OVERLAYS ── */}
-      {renderLegend()}
       {renderNavBanner()}
       {renderNavEtaBar()}
 
@@ -2684,8 +2800,7 @@ export default function HomeScreen() {
       {!navigating && (
         <View style={styles.topBar}>
           <View style={styles.topLeft}>
-            <Text style={styles.appName}>Campus Navigator</Text>
-            <Text style={styles.campusSubtitle}>University of Lagos</Text>
+            <Text style={styles.appName}>CampusNav</Text>
           </View>
           <TouchableOpacity
             style={[
@@ -2734,7 +2849,9 @@ export default function HomeScreen() {
       {/* ── EVENT POPUP ── */}
       {selectedEvent && !directions && !loadingDirs && !navigating && (
         <View style={styles.selectedCard}>
-          <Text style={styles.selectedIcon}>{selectedEvent.icon || "📌"}</Text>
+          <View style={[styles.eventIconBox, { marginRight: 12 }]}>
+            <Calendar size={22} color="#d97706" strokeWidth={2.2} />
+          </View>
           <View style={styles.selectedInfo}>
             <Text style={styles.selectedName}>{selectedEvent.name}</Text>
             <Text style={styles.selectedCoords}>
@@ -2792,11 +2909,11 @@ export default function HomeScreen() {
                 keyboardShouldPersistTaps="handled"
               >
                 {[
-                  { tab: "home", icon: "🏠", label: "Home" },
-                  { tab: "buildings", icon: "📍", label: "Places" },
-                  { tab: "friends", icon: "👥", label: "Friends" },
-                  { tab: "events", icon: "🗓️", label: "Events" },
-                ].map(({ tab, icon, label }) => (
+                  { tab: "home", Icon: Home, label: "Home" },
+                  { tab: "buildings", Icon: MapPin, label: "Places" },
+                  { tab: "friends", Icon: Users, label: "Friends" },
+                  { tab: "events", Icon: Calendar, label: "Events" },
+                ].map(({ tab, Icon, label }) => (
                   <TouchableOpacity
                     key={tab}
                     style={[
@@ -2819,7 +2936,11 @@ export default function HomeScreen() {
                     }}
                   >
                     <View>
-                      <Text style={styles.navIcon}>{icon}</Text>
+                      <Icon
+                        size={20}
+                        color={activeTab === tab ? "#1A73E8" : "#999"}
+                        strokeWidth={activeTab === tab ? 2.4 : 2}
+                      />
                       {tab === "friends" && friendRequests.length > 0 && (
                         <View style={styles.navBadge}>
                           <Text style={styles.navBadgeText}>
@@ -2842,8 +2963,8 @@ export default function HomeScreen() {
                   style={styles.navItem}
                   onPress={() => router.push("../account")}
                 >
-                  <Text style={styles.navIcon}>👤</Text>
-                  <Text style={styles.navLabel}>Account</Text>
+                  <User size={20} color="#999" strokeWidth={2} />
+                  <Text style={styles.navLabel}>Dashboard</Text>
                 </TouchableOpacity>
               </ScrollView>
             )}
@@ -2896,7 +3017,7 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   topLeft: { flex: 1 },
-  appName: { fontSize: 16, fontWeight: "bold", color: "#1a5c38" },
+  appName: { fontSize: 15, fontWeight: "600", color: "#1a5c38" },
   campusSubtitle: {
     fontSize: 11,
     color: "#4a8c63",
@@ -3319,6 +3440,16 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   searchResults: { maxHeight: 220, marginBottom: 8 },
+  searchFocusedPanel: { maxHeight: 320, marginBottom: 8 },
+  searchSectionLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#999",
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+    marginTop: 10,
+    marginBottom: 4,
+  },
   resultItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -3326,7 +3457,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#f0f0f0",
   },
-  resultIcon: { fontSize: 20, marginRight: 12 },
+  resultIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
   resultName: { fontSize: 14, fontWeight: "600", color: "#333" },
   resultDesc: { fontSize: 12, color: "#999", marginTop: 2 },
 

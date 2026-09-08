@@ -1,14 +1,20 @@
 
 
 // ── Building categories & colors ──────────────────────────────────────────────
+     // Tier 1 (faculty, hostel) keep full-saturation, always-distinct color.
+// Tier 2 (admin, food, library, medical, sport) share one neutral pin/dot
+// pair — category is still readable via the icon inside the pin, not
+// via seven different competing colors.
+const TIER2_NEUTRAL = { pin: "#64748B", dot: "#F1F5F9" };
+
 export const CATEGORY_COLORS: Record<string, { pin: string; dot: string }> = {
   faculty: { pin: "#1565C0", dot: "#E3F2FD" },
   hostel: { pin: "#6A1B9A", dot: "#F3E5F5" },
-  admin: { pin: "#2E7D32", dot: "#E8F5E9" },
-  food: { pin: "#2E7D32", dot: "#E8F5E9" },
-  library: { pin: "#00838F", dot: "#E0F7FA" },
-  medical: { pin: "#C62828", dot: "#FFEBEE" },
-  sport: { pin: "#F9A825", dot: "#FFFDE7" },
+  admin: TIER2_NEUTRAL,
+  food: TIER2_NEUTRAL,
+  library: TIER2_NEUTRAL,
+  medical: TIER2_NEUTRAL,
+  sport: TIER2_NEUTRAL,
 };
 
 export const NIGHT_MAP_STYLE = [
