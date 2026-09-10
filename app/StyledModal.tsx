@@ -1,4 +1,8 @@
 import { Modal, View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import type { ComponentType } from "react";
+import type { LucideProps } from "lucide-react-native";
+
+export type ModalIcon = ComponentType<LucideProps>;
 
 export interface ModalButton {
   text: string;
@@ -10,16 +14,20 @@ interface Props {
   visible: boolean;
   title: string;
   message?: string;
-  icon?: string;
+  icon?: ModalIcon;
   buttons: ModalButton[];
 }
 
-export function StyledModal({ visible, title, message, icon, buttons }: Props) {
+export function StyledModal({ visible, title, message, icon: Icon, buttons }: Props) {
   return (
     <Modal transparent animationType="fade" visible={visible} statusBarTranslucent>
       <View style={s.overlay}>
         <View style={s.card}>
-          {icon ? <Text style={s.icon}>{icon}</Text> : null}
+          {Icon ? (
+            <View style={s.iconWrap}>
+              <Icon size={32} color="#1a5c38" strokeWidth={2} />
+            </View>
+          ) : null}
           <Text style={s.title}>{title}</Text>
           {message ? <Text style={s.message}>{message}</Text> : null}
           <View style={[s.btnRow, buttons.length > 2 && s.btnCol]}>
@@ -61,7 +69,7 @@ export interface ModalConfig {
   visible: boolean;
   title: string;
   message?: string;
-  icon?: string;
+  icon?: ModalIcon;
   buttons: ModalButton[];
 }
 
@@ -74,7 +82,7 @@ export function useStyledModal() {
     title: string,
     message: string,
     buttons: ModalButton[],
-    icon?: string
+    icon?: ModalIcon
   ) {
     setConfig({ visible: true, title, message, icon, buttons });
   }
@@ -88,7 +96,7 @@ export function useStyledModal() {
     message: string,
     onConfirm: () => void,
     confirmText = "Confirm",
-    icon?: string,
+    icon?: ModalIcon,
     destructive = false
   ) {
     setConfig({
@@ -100,7 +108,7 @@ export function useStyledModal() {
     });
   }
 
-  function alert(title: string, message: string, icon?: string) {
+  function alert(title: string, message: string, icon?: ModalIcon) {
     setConfig({
       visible: true, title, message, icon,
       buttons: [{ text: "OK", style: "default", onPress: hideModal }],
@@ -114,7 +122,7 @@ export function useStyledModal() {
 const s = StyleSheet.create({
   overlay:          { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", alignItems: "center", paddingHorizontal: 32 },
   card:             { backgroundColor: "#fff", borderRadius: 20, padding: 24, width: "100%", alignItems: "center", shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 20, elevation: 10 },
-  icon:             { fontSize: 40, marginBottom: 10 },
+  iconWrap:         { marginBottom: 10 },
   title:            { fontSize: 17, fontWeight: "700", color: "#1a1a1a", textAlign: "center", marginBottom: 8 },
   message:          { fontSize: 14, color: "#666", textAlign: "center", lineHeight: 20, marginBottom: 20 },
   btnRow:           { flexDirection: "row", gap: 10, width: "100%" },

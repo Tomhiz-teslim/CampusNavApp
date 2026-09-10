@@ -7,18 +7,27 @@ import * as Speech from "expo-speech";
 import { signOut } from "firebase/auth";
 import { get, onValue, ref, remove, set, update } from "firebase/database";
 import {
+  AlertTriangle,
   Building2,
   Calendar,
+  Camera,
   Car,
+  Check,
   Compass,
   EyeOff,
+  Flag,
   Footprints,
   History,
   Home,
+  LogOut,
   MapPin,
+  Navigation,
+  Route,
   Search,
   User,
   Users,
+  Volume2,
+  VolumeX,
   X,
 } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -146,6 +155,20 @@ const REROUTE_THRESHOLD_M = 25;
 const ARRIVAL_THRESHOLD_M = 18;
 const STEP_ADVANCE_WALKING_M = 20;
 const STEP_ADVANCE_DRIVING_M = 60;
+
+// Default map density: with ~94 buildings + community locations, showing
+// everything at once (the old behaviour) buries the map in pins regardless
+// of where the user actually is. In the default "all categories, no search"
+// view we only show what's within this radius of the user — tapping a
+// category chip or typing a search term bypasses this entirely (see
+// isDefaultView in visibleBuildings below), since those are explicit asks
+// to see a full set, not a default we should be limiting.
+const DEFAULT_VISIBILITY_RADIUS_M = 700;
+// Used as the distance-from center before userLocation resolves (cold
+// start / permission not yet granted), so density behaves consistently
+// instead of jumping from "nothing" to "everything" once GPS comes in.
+// Matches the centroid your category-chip handler already re-centers to.
+const FALLBACK_CAMPUS_CENTER = { latitude: 6.517, longitude: 3.393 };
 
 // ── Tab skeleton loader ───────────────────────────────────────────────────────
 
@@ -498,7 +521,7 @@ export default function HomeScreen() {
         ).then((result) => {
           setLoadingDirs(false);
           if (!result) {
-            showAlert("No route found", "Could not calculate a route.", "🗺️");
+            showAlert("No route found", "Could not calculate a route.", Route);
             return;
           }
           setDirections(result);
@@ -582,7 +605,11 @@ export default function HomeScreen() {
           ).then((result) => {
             setLoadingDirs(false);
             if (!result) {
-              showAlert("No route found", "Could not calculate a route.", "🗺️");
+              showAlert(
+                "No route found",
+                "Could not calculate a route.",
+                Route,
+              );
               return;
             }
             setDirections(result);
@@ -662,7 +689,7 @@ export default function HomeScreen() {
                   showAlert(
                     "No route found",
                     "Could not calculate a route.",
-                    "🗺️",
+                    Route,
                   );
                   return;
                 }
@@ -938,7 +965,7 @@ export default function HomeScreen() {
           { duration: 1000 },
         );
         setTimeout(() => {
-          showAlert("🎉 Arrived!", `You have reached ${dest.name}.`);
+          showAlert("Arrived!", `You have reached ${dest.name}.`, Flag);
         }, 800);
         return;
       } else {
@@ -1241,7 +1268,11 @@ export default function HomeScreen() {
         ref(database, `friends/${userId}/${targetUid}`),
       );
       if (existing.exists()) {
-        showAlert("Already added", "Already friends or request pending.", "👥");
+        showAlert(
+          "Already added",
+          "Already friends or request pending.",
+          Users,
+        );
         setAddingFriend(false);
         return;
       }
@@ -1257,14 +1288,14 @@ export default function HomeScreen() {
         sentAt: Date.now(),
       });
       showAlert(
-        "✅ Request sent!",
+        "Request sent!",
         `Friend request sent to ${targetDisplayName}.`,
-        "📨",
+        Check,
       );
       setFriendUsername("");
       setUserSuggestions([]);
     } catch {
-      showAlert("Error", "Something went wrong. Try again.", "⚠️");
+      showAlert("Error", "Something went wrong. Try again.", AlertTriangle);
     }
     setAddingFriend(false);
   }
@@ -1286,7 +1317,7 @@ export default function HomeScreen() {
       acceptedAt: Date.now(),
     });
     await remove(ref(database, `friendRequests/${userId}/${fromUid}`));
-    showAlert("✅ Friends!", `You and ${fromName} are now friends.`, "🤝");
+    showAlert("Friends!", `You and ${fromName} are now friends.`, Check);
   }
   async function handleDeclineRequest(fromUid: string) {
     await remove(ref(database, `friendRequests/${userId}/${fromUid}`));
@@ -1301,7 +1332,7 @@ export default function HomeScreen() {
         setFriendLocations((prev) => prev.filter((f) => f.uid !== friendUid));
       },
       "Remove",
-      "👤",
+      User,
       true,
     );
   }
@@ -1354,7 +1385,7 @@ export default function HomeScreen() {
         showAlert(
           "Location unavailable",
           "Please enable location services.",
-          "📍",
+          MapPin,
         );
         return;
       }
@@ -1373,7 +1404,7 @@ export default function HomeScreen() {
         showAlert(
           "Location unavailable",
           "Could not get your position. Try again.",
-          "📍",
+          MapPin,
         );
         return;
       }
@@ -1409,7 +1440,7 @@ export default function HomeScreen() {
 
     setLoadingDirs(false);
     if (!result) {
-      showAlert("No route found", "Could not calculate a route.", "🗺️");
+      showAlert("No route found", "Could not calculate a route.", Route);
       return;
     }
 
@@ -1567,14 +1598,18 @@ export default function HomeScreen() {
         router.replace("/login");
       },
       "Log Out",
-      "⎋",
+      LogOut,
       true,
     );
   }
 
   async function handleShareLocation() {
     if (!userLocation) {
-      showAlert("Location unavailable", "Your location isn't ready yet.", "📍");
+      showAlert(
+        "Location unavailable",
+        "Your location isn't ready yet.",
+        MapPin,
+      );
       return;
     }
     const url = `[maps.google.com](https://maps.google.com/?q=${userLocation.latitude},${userLocation.longitude})`;
@@ -1618,7 +1653,24 @@ export default function HomeScreen() {
           b.name.toLowerCase().includes(search.toLowerCase()) ||
           b.description.toLowerCase().includes(search.toLowerCase()) ||
           b.category.toLowerCase().includes(search.toLowerCase());
-        return matchesCategory && matchesSearch;
+        if (!matchesCategory || !matchesSearch) return false;
+
+        // Proximity gate — only for the default browse state (no search,
+        // no category chip selected). A chip tap or a search term is an
+        // explicit request to see a full set, so it skips this cutoff.
+        const isDefaultView = search.length === 0 && filterCat === "all";
+        if (isDefaultView) {
+          const center = userLocation ?? FALLBACK_CAMPUS_CENTER;
+          const distFromCenter = haversineMetres(
+            center.latitude,
+            center.longitude,
+            b.latitude,
+            b.longitude,
+          );
+          if (distFromCenter > DEFAULT_VISIBILITY_RADIUS_M) return false;
+        }
+
+        return true;
       })
       .sort((a, b) => {
         if (!userLocation) return 0;
@@ -1709,13 +1761,18 @@ export default function HomeScreen() {
             style={styles.muteBtn}
             onPress={() => setMuted((v) => !v)}
           >
-            <Text style={styles.muteBtnText}>{muted ? "🔇" : "🔊"}</Text>
+            {muted ? (
+              <VolumeX size={18} color="#fff" strokeWidth={2.2} />
+            ) : (
+              <Volume2 size={18} color="#fff" strokeWidth={2.2} />
+            )}
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.arBtn}
             onPress={() => setArMode(true)}
           >
-            <Text style={styles.arBtnText}>📷 AR</Text>
+            <Camera size={13} color="#fff" strokeWidth={2.4} />
+            <Text style={styles.arBtnText}>AR</Text>
           </TouchableOpacity>
         </View>
         {nextStep && (
@@ -1773,9 +1830,11 @@ export default function HomeScreen() {
         </View>
         <View style={styles.etaDivider} />
         <View style={styles.etaItem}>
-          <Text style={styles.etaValue}>
-            {travelMode === "walking" ? "🚶" : "🚗"}
-          </Text>
+          {travelMode === "walking" ? (
+            <Footprints size={18} color="#222" strokeWidth={2.2} />
+          ) : (
+            <Car size={18} color="#222" strokeWidth={2.2} />
+          )}
           <Text style={styles.etaLabel}>{travelMode}</Text>
         </View>
         <TouchableOpacity
@@ -1969,7 +2028,7 @@ export default function HomeScreen() {
                 showAlert(
                   "Location hidden",
                   "Friends can no longer see you.",
-                  "🙈",
+                  EyeOff,
                 );
             }}
             trackColor={{ false: "#ddd", true: "#4a8c63" }}
@@ -2214,7 +2273,7 @@ export default function HomeScreen() {
                           showAlert(
                             "No route found",
                             "Could not calculate a route to your friend.",
-                            "🗺️",
+                            Route,
                           );
                           return;
                         }
@@ -2241,14 +2300,15 @@ export default function HomeScreen() {
                         );
                       }}
                     >
-                      <Text style={styles.locateBtnText}>📍</Text>
+                      <Navigation size={16} color="#fff" strokeWidth={2.4} />
                     </TouchableOpacity>
                   )}
                   <TouchableOpacity
                     style={styles.removeBtn}
                     onPress={() => handleRemoveFriend(f.uid, f.name)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
-                    <Text style={styles.removeBtnText}>✕</Text>
+                    <X size={14} color="#bbb" strokeWidth={2.2} />
                   </TouchableOpacity>
                 </View>
               );
@@ -2766,45 +2826,6 @@ export default function HomeScreen() {
     );
   }
 
-  // ── Legend ─────────────────────────────────────────────────────────────────
-  function renderLegend() {
-    if (navigating) return null;
-    const shown =
-      filterCat === "all"
-        ? Object.entries(CATEGORY_COLORS)
-        : [[filterCat, CATEGORY_COLORS[filterCat]]];
-    return (
-      <View style={styles.legend}>
-        {shown.map(([cat, colors]: any) => (
-          <View key={cat} style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: colors.pin }]} />
-            <Text style={styles.legendLabel}>
-              {cat.charAt(0).toUpperCase() + cat.slice(1)}
-            </Text>
-          </View>
-        ))}
-        {communityLocations.length > 0 && (
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: "#7c3aed" }]} />
-            <Text style={styles.legendLabel}>Community</Text>
-          </View>
-        )}
-        {events.length > 0 && (
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: "#d97706" }]} />
-            <Text style={styles.legendLabel}>Events</Text>
-          </View>
-        )}
-        {friends.length > 0 && (
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: "#e67e22" }]} />
-            <Text style={styles.legendLabel}>Friends</Text>
-          </View>
-        )}
-      </View>
-    );
-  }
-
   const bottomSheetTall =
     activeTab === "buildings" ||
     activeTab === "friends" ||
@@ -3070,8 +3091,13 @@ export default function HomeScreen() {
             ]}
             onPress={() => setActiveTab("friends")}
           >
+            {sharingLocation ? (
+              <MapPin size={12} color="#1a5c38" strokeWidth={2.4} />
+            ) : (
+              <EyeOff size={12} color="#555" strokeWidth={2.4} />
+            )}
             <Text style={styles.sharingPillText}>
-              {sharingLocation ? "📍 Live" : "🙈 Hidden"}
+              {sharingLocation ? "Live" : "Hidden"}
             </Text>
           </TouchableOpacity>
           {friendRequests.length > 0 && (
@@ -3081,15 +3107,6 @@ export default function HomeScreen() {
               </Text>
             </View>
           )}
-          <TouchableOpacity
-            style={styles.shareBtn}
-            onPress={handleShareLocation}
-          >
-            <Text style={styles.shareBtnText}>↗</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-            <Text style={styles.logoutText}>⎋</Text>
-          </TouchableOpacity>
         </View>
       )}
 
@@ -3285,16 +3302,10 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginTop: 1,
   },
-  logoutBtn: { backgroundColor: "#f5f5f5", borderRadius: 8, padding: 8 },
-  logoutText: { fontSize: 18 },
-  shareBtn: {
-    backgroundColor: "#e8f5ee",
-    borderRadius: 8,
-    padding: 8,
-    marginRight: 6,
-  },
-  shareBtnText: { fontSize: 18, color: "#1a5c38" },
   sharingPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 5,
@@ -3314,22 +3325,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
   },
   requestBadgeText: { color: "#fff", fontSize: 11, fontWeight: "700" },
-
-  legend: {
-    position: "absolute",
-    top: 130,
-    right: 16,
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    padding: 8,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  legendItem: { flexDirection: "row", alignItems: "center", marginBottom: 4 },
-  legendDot: { width: 10, height: 10, borderRadius: 5, marginRight: 6 },
-  legendLabel: { fontSize: 11, color: "#555" },
 
   selectedCard: {
     position: "absolute",
@@ -3670,13 +3665,21 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#f5f5f5",
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 10,
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#eee",
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
   searchIcon: { fontSize: 16, marginRight: 8 },
-  searchInput: { flex: 1, fontSize: 15, color: "#333" },
+  searchInput: { flex: 1, fontSize: 16, color: "#222" },
   clearText: { fontSize: 14, color: "#999", paddingHorizontal: 4 },
   filterRow: { marginBottom: 10 },
   filterChip: {
@@ -3882,25 +3885,26 @@ const styles = StyleSheet.create({
   },
   declineBtnText: { color: "#888", fontWeight: "700", fontSize: 14 },
   locateBtn: {
-    backgroundColor: "#e8f5ee",
-    borderRadius: 8,
-    width: 32,
-    height: 32,
+    backgroundColor: "#1a5c38",
+    borderRadius: 18,
+    width: 36,
+    height: 36,
     justifyContent: "center",
     alignItems: "center",
-    marginLeft: 6,
+    marginLeft: 8,
+    shadowColor: "#1a5c38",
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
-  locateBtnText: { fontSize: 16 },
   removeBtn: {
-    backgroundColor: "#fdecea",
-    borderRadius: 8,
-    width: 32,
-    height: 32,
+    width: 26,
+    height: 26,
     justifyContent: "center",
     alignItems: "center",
-    marginLeft: 6,
+    marginLeft: 16,
   },
-  removeBtnText: { color: "#c0392b", fontWeight: "700", fontSize: 13 },
   emptyText: {
     fontSize: 13,
     color: "#aaa",
@@ -3993,6 +3997,9 @@ const styles = StyleSheet.create({
   dirArrowText: { fontSize: 22, color: "#ccc", fontWeight: "300" },
 
   arBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
     backgroundColor: "rgba(255,255,255,0.18)",
     borderRadius: 8,
     paddingHorizontal: 10,
