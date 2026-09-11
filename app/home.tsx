@@ -95,6 +95,29 @@ const CATEGORIES = [
   "admin",
 ];
 
+const MONTH_ABBR = [
+  "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+  "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
+];
+function getEventDateBadge(
+  dateStr?: string,
+): { day: string; month: string } | null {
+  if (!dateStr) return null;
+  const iso = dateStr.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) {
+    const m = parseInt(iso[2], 10) - 1;
+    return { day: iso[3], month: MONTH_ABBR[m] ?? "" };
+  }
+  const parsed = new Date(dateStr);
+  if (!isNaN(parsed.getTime())) {
+    return {
+      day: String(parsed.getDate()),
+      month: MONTH_ABBR[parsed.getMonth()],
+    };
+  }
+  return null;
+}
+
 // ── AR gate ──────────────────────────────────────────────────────────────────
 // AR features almost always depend on native camera/motion modules that
 // Expo Go's fixed runtime doesn't include (it only ships the native modules
@@ -2590,6 +2613,160 @@ export default function HomeScreen() {
             })}
           </ScrollView>
 
+          {!searchFocused && search.length === 0 && (
+            <>
+              {friends.length > 0 && (
+                <View style={styles.previewSection}>
+                  <View style={styles.previewHeaderRow}>
+                    <Text style={styles.previewHeaderText}>Friends</Text>
+                    <TouchableOpacity onPress={() => setActiveTab("friends")}>
+                      <Text style={styles.previewSeeAll}>
+                        {friendLocations.length} nearby ›
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.avatarStripRow}>
+                    {friends.slice(0, 4).map((f) => {
+                      const loc = friendLocations.find(
+                        (fl) => fl.uid === f.uid,
+                      );
+                      return (
+                        <TouchableOpacity
+                          key={f.uid}
+                          style={styles.avatarStripItem}
+                          onPress={() => {
+                            if (loc) {
+                              mapRef.current?.animateToRegion(
+                                {
+                                  latitude: loc.latitude,
+                                  longitude: loc.longitude,
+                                  latitudeDelta: 0.004,
+                                  longitudeDelta: 0.004,
+                                },
+                                600,
+                              );
+                            } else {
+                              setActiveTab("friends");
+                            }
+                          }}
+                        >
+                          <View style={styles.avatarStripAvatar}>
+                            {friendPhotos[f.uid] ? (
+                              <Image
+                                source={{
+                                  uri: `data:image/jpeg;base64,${friendPhotos[f.uid]}`,
+                                }}
+                                style={styles.avatarStripImg}
+                              />
+                            ) : (
+                              <Text style={styles.avatarStripText}>
+                                {(f.name || "?")[0].toUpperCase()}
+                              </Text>
+                            )}
+                          </View>
+                          {loc && <View style={styles.avatarStripDot} />}
+                        </TouchableOpacity>
+                      );
+                    })}
+                    {friends.length > 4 && (
+                      <TouchableOpacity
+                        style={styles.avatarStripItem}
+                        onPress={() => setActiveTab("friends")}
+                      >
+                        <View style={styles.avatarStripMore}>
+                          <Text style={styles.avatarStripMoreText}>
+                            +{friends.length - 4}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              )}
+
+              {events.length > 0 && (
+                <View style={styles.previewSection}>
+                  <View style={styles.previewHeaderRow}>
+                    <Text style={styles.previewHeaderText}>
+                      Campus Events
+                    </Text>
+                    <TouchableOpacity onPress={() => setActiveTab("events")}>
+                      <Text style={styles.previewSeeAll}>See all ›</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {(() => {
+                    const nextEvent = events[0];
+                    const badge = getEventDateBadge(nextEvent.date);
+                    return (
+                      <TouchableOpacity
+                        style={styles.eventPreviewRow}
+                        activeOpacity={0.75}
+                        onPress={() => {
+                          if (nextEvent.latitude && nextEvent.longitude) {
+                            mapRef.current?.animateToRegion(
+                              {
+                                latitude: nextEvent.latitude,
+                                longitude: nextEvent.longitude,
+                                latitudeDelta: 0.003,
+                                longitudeDelta: 0.003,
+                              },
+                              600,
+                            );
+                          }
+                          setSelectedEvent(nextEvent);
+                        }}
+                      >
+                        <View style={styles.eventPreviewBadge}>
+                          {badge ? (
+                            <>
+                              <Text style={styles.eventPreviewBadgeDay}>
+                                {badge.day}
+                              </Text>
+                              <Text style={styles.eventPreviewBadgeMonth}>
+                                {badge.month}
+                              </Text>
+                            </>
+                          ) : (
+                            <Calendar
+                              size={18}
+                              color="#1a5c38"
+                              strokeWidth={2.2}
+                            />
+                          )}
+                        </View>
+                        <View style={styles.eventPreviewInfo}>
+                          <Text
+                            style={styles.eventPreviewName}
+                            numberOfLines={1}
+                          >
+                            {nextEvent.name}
+                          </Text>
+                          <Text
+                            style={styles.eventPreviewMeta}
+                            numberOfLines={1}
+                          >
+                            {nextEvent.time ? `${nextEvent.time} · ` : ""}
+                            {nextEvent.locationName}
+                          </Text>
+                        </View>
+                        <ChevronRight
+                          size={16}
+                          color="#ccc"
+                          strokeWidth={2.2}
+                        />
+                      </TouchableOpacity>
+                    );
+                  })()}
+                  {events.length > 1 && (
+                    <Text style={styles.eventPreviewMore}>
+                      +{events.length - 1} more this week
+                    </Text>
+                  )}
+                </View>
+              )}
+            </>
+          )}
+
           {searchFocused && search.length === 0 ? (
             <View style={styles.searchFocusedPanel}>
               {recentSearches.length > 0 && (
@@ -3883,6 +4060,87 @@ const styles = StyleSheet.create({
   },
   resultName: { fontSize: 14, fontWeight: "600", color: "#333" },
   resultDesc: { fontSize: 12, color: "#999", marginTop: 2 },
+
+  previewSection: { marginBottom: 16 },
+  previewHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  previewHeaderText: { fontSize: 13, fontWeight: "700", color: "#333" },
+  previewSeeAll: { fontSize: 12, fontWeight: "600", color: "#1a5c38" },
+
+  avatarStripRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  avatarStripItem: { position: "relative" },
+  avatarStripAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#1a5c38",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
+  avatarStripImg: { width: 40, height: 40, borderRadius: 20 },
+  avatarStripText: { color: "#fff", fontWeight: "700", fontSize: 15 },
+  avatarStripDot: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 11,
+    height: 11,
+    borderRadius: 6,
+    backgroundColor: "#2fae60",
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
+  avatarStripMore: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#eef2ef",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  avatarStripMoreText: { color: "#1a5c38", fontWeight: "700", fontSize: 12 },
+
+  eventPreviewRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 4,
+  },
+  eventPreviewBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: "#f0f7f3",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  eventPreviewBadgeDay: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#1a5c38",
+    lineHeight: 17,
+  },
+  eventPreviewBadgeMonth: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#4a8c63",
+    letterSpacing: 0.4,
+  },
+  eventPreviewInfo: { flex: 1 },
+  eventPreviewName: { fontSize: 14, fontWeight: "700", color: "#1a1a1a" },
+  eventPreviewMeta: { fontSize: 12, color: "#888", marginTop: 2 },
+  eventPreviewMore: {
+    fontSize: 11,
+    color: "#aaa",
+    marginTop: 8,
+    marginLeft: 56,
+  },
 
   tabTitle: {
     fontSize: 16,
