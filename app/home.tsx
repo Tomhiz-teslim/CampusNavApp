@@ -8,23 +8,28 @@ import { signOut } from "firebase/auth";
 import { get, onValue, ref, remove, set, update } from "firebase/database";
 import {
   AlertTriangle,
+  Bell,
   Building2,
   Calendar,
   Camera,
   Car,
   Check,
+  ChevronRight,
   Compass,
   EyeOff,
   Flag,
   Footprints,
   History,
   Home,
+  LocateFixed,
   LogOut,
   MapPin,
   Navigation,
+  Play,
   Route,
   Search,
   User,
+  UserPlus,
   Users,
   Volume2,
   VolumeX,
@@ -216,6 +221,29 @@ function CommunityLocationMarker({
   );
 }
 
+function HighlightMatch({
+  text,
+  query,
+  textStyle,
+  matchStyle,
+}: {
+  text: string;
+  query: string;
+  textStyle: any;
+  matchStyle: any;
+}) {
+  if (!query) return <Text style={textStyle}>{text}</Text>;
+  const idx = text.toLowerCase().indexOf(query.toLowerCase());
+  if (idx === -1) return <Text style={textStyle}>{text}</Text>;
+  return (
+    <Text style={textStyle}>
+      {text.slice(0, idx)}
+      <Text style={matchStyle}>{text.slice(idx, idx + query.length)}</Text>
+      {text.slice(idx + query.length)}
+    </Text>
+  );
+}
+
 export default function HomeScreen() {
   const [userName, setUserName] = useState("");
   const [userId, setUserId] = useState("");
@@ -266,6 +294,7 @@ export default function HomeScreen() {
   const kalmanRef = useRef<KalmanState | null>(null);
 
   const panelAnim = useRef(new Animated.Value(0)).current;
+  const reroutingAnim = useRef(new Animated.Value(0)).current;
 
   const [events, setEvents] = useState<any[]>([]);
   const [communityLocations, setCommunityLocations] = useState<any[]>([]);
@@ -573,6 +602,14 @@ export default function HomeScreen() {
       }).start();
     }
   }, [directions, loadingDirs]);
+
+  useEffect(() => {
+    Animated.timing(reroutingAnim, {
+      toValue: rerouting ? 1 : 0,
+      duration: rerouting ? 200 : 350,
+      useNativeDriver: true,
+    }).start();
+  }, [rerouting]);
 
   useEffect(() => {
     const dbUnsubscribers: (() => void)[] = [];
@@ -1741,12 +1778,26 @@ export default function HomeScreen() {
 
     return (
       <View style={styles.navBannerContainer}>
-        {rerouting && (
-          <View style={styles.reroutingOverlay}>
-            <ActivityIndicator color="#fff" size="small" />
-            <Text style={styles.reroutingOverlayText}> Rerouting…</Text>
-          </View>
-        )}
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.reroutingOverlay,
+            {
+              opacity: reroutingAnim,
+              transform: [
+                {
+                  translateY: reroutingAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-16, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <ActivityIndicator color="#fff" size="small" />
+          <Text style={styles.reroutingOverlayText}> Rerouting…</Text>
+        </Animated.View>
         <View style={styles.navBannerCard}>
           <View style={styles.navArrowBox}>
             <Text style={styles.navArrowText}>{arrow}</Text>
@@ -1762,10 +1813,11 @@ export default function HomeScreen() {
             onPress={() => setMuted((v) => !v)}
           >
             {muted ? (
-              <VolumeX size={18} color="#fff" strokeWidth={2.2} />
+              <VolumeX size={13} color="#fff" strokeWidth={2.4} />
             ) : (
-              <Volume2 size={18} color="#fff" strokeWidth={2.2} />
+              <Volume2 size={13} color="#fff" strokeWidth={2.4} />
             )}
+            <Text style={styles.arBtnText}>{muted ? "Muted" : "Sound"}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.arBtn}
@@ -1879,13 +1931,14 @@ export default function HomeScreen() {
                   style={styles.startNavBtn}
                   onPress={handleStartNavigation}
                 >
-                  <Text style={styles.startNavBtnText}>▶ Start</Text>
+                  <Play size={14} color="#fff" strokeWidth={2.4} fill="#fff" />
+                  <Text style={styles.startNavBtnText}>Start</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.cancelBtn}
                   onPress={handleCancelDirections}
                 >
-                  <Text style={styles.cancelBtnText}>✕</Text>
+                  <X size={16} color="#555" strokeWidth={2.4} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -2036,7 +2089,10 @@ export default function HomeScreen() {
           />
         </View>
 
-        <Text style={styles.sectionLabel}>➕ Add Friend</Text>
+        <View style={styles.tabTitleRow}>
+          <UserPlus size={14} color="#888" strokeWidth={2.4} />
+          <Text style={styles.sectionLabelText}>Add Friend</Text>
+        </View>
         <View style={styles.addFriendRow}>
           <TextInput
             style={styles.addFriendInput}
@@ -2055,7 +2111,7 @@ export default function HomeScreen() {
                 setUserSuggestions([]);
               }}
             >
-              <Text style={styles.clearSearchText}>✕</Text>
+              <X size={14} color="#999" strokeWidth={2.4} />
             </TouchableOpacity>
           )}
         </View>
@@ -2109,9 +2165,12 @@ export default function HomeScreen() {
 
         {friendRequests.length > 0 && (
           <>
-            <Text style={styles.sectionLabel}>
-              📬 Requests ({friendRequests.length})
-            </Text>
+            <View style={styles.tabTitleRow}>
+              <Bell size={14} color="#888" strokeWidth={2.4} />
+              <Text style={styles.sectionLabelText}>
+                Requests ({friendRequests.length})
+              </Text>
+            </View>
             {friendRequests.map((req) => (
               <View key={req.uid} style={styles.requestCard}>
                 <View style={styles.friendAvatar}>
@@ -2144,13 +2203,13 @@ export default function HomeScreen() {
                     )
                   }
                 >
-                  <Text style={styles.acceptBtnText}>✓</Text>
+                  <Check size={15} color="#fff" strokeWidth={2.6} />
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.declineBtn}
                   onPress={() => handleDeclineRequest(req.uid)}
                 >
-                  <Text style={styles.declineBtnText}>✕</Text>
+                  <X size={15} color="#888" strokeWidth={2.6} />
                 </TouchableOpacity>
               </View>
             ))}
@@ -2379,7 +2438,7 @@ export default function HomeScreen() {
                   ) : null}
                 </View>
                 <View style={styles.dirArrow}>
-                  <Text style={styles.dirArrowText}>›</Text>
+                  <ChevronRight size={20} color="#ccc" strokeWidth={2} />
                 </View>
               </TouchableOpacity>
             ))
@@ -2603,10 +2662,22 @@ export default function HomeScreen() {
                         <Calendar size={16} color="#d97706" strokeWidth={2.2} />
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.resultName}>{ev.name}</Text>
+                        <HighlightMatch
+                          text={ev.name}
+                          query={search}
+                          textStyle={styles.resultName}
+                          matchStyle={styles.resultMatchHighlight}
+                        />
                         <Text style={styles.resultDesc}>
                           {ev.date}
                           {ev.time ? ` · ${ev.time}` : ""} · {ev.locationName}
+                        </Text>
+                      </View>
+                      <View
+                        style={[styles.categoryPill, { backgroundColor: "#fef3c7" }]}
+                      >
+                        <Text style={[styles.categoryPillText, { color: "#d97706" }]}>
+                          event
                         </Text>
                       </View>
                     </TouchableOpacity>
@@ -2643,8 +2714,18 @@ export default function HomeScreen() {
                     );
                   })()}
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.resultName}>{b.name}</Text>
-                    <Text style={styles.resultDesc}>{b.description}</Text>
+                    <HighlightMatch
+                      text={b.name}
+                      query={search}
+                      textStyle={styles.resultName}
+                      matchStyle={styles.resultMatchHighlight}
+                    />
+                    <HighlightMatch
+                      text={b.description}
+                      query={search}
+                      textStyle={styles.resultDesc}
+                      matchStyle={styles.resultMatchHighlight}
+                    />
                   </View>
                   <View
                     style={[
@@ -2680,9 +2761,31 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               ))}
               {visibleBuildings.length === 0 && matchingEvents.length === 0 && (
-                <Text style={styles.emptyText}>
-                  No matches for "{search}". Try a category chip instead.
-                </Text>
+                <View style={styles.noResultsBox}>
+                  <Text style={styles.emptyText}>No matches for "{search}"</Text>
+                  <Text style={styles.noResultsHint}>Try browsing a category instead:</Text>
+                  <View style={styles.noResultsChipRow}>
+                    {CATEGORIES.filter((c) => c !== "all").map((cat) => {
+                      const colors = CATEGORY_COLORS[cat] || CATEGORY_COLORS.admin;
+                      const ChipIcon = CATEGORY_ICON[cat] || Building2;
+                      return (
+                        <TouchableOpacity
+                          key={`noresult-${cat}`}
+                          style={[styles.noResultsChip, { borderColor: colors.pin }]}
+                          onPress={() => {
+                            setSearch("");
+                            setFilterCat(cat);
+                          }}
+                        >
+                          <ChipIcon size={13} color={colors.pin} strokeWidth={2.2} />
+                          <Text style={[styles.noResultsChipText, { color: colors.pin }]}>
+                            {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
               )}
             </ScrollView>
           ) : null}
@@ -2826,11 +2929,13 @@ export default function HomeScreen() {
     );
   }
 
+  const searchActive = searchFocused || search.length > 0;
   const bottomSheetTall =
     activeTab === "buildings" ||
     activeTab === "friends" ||
     activeTab === "events" ||
-    !!directions;
+    !!directions ||
+    (activeTab === "home" && searchActive);
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
@@ -3073,7 +3178,7 @@ export default function HomeScreen() {
           activeOpacity={0.85}
         >
           <View style={styles.recentreBtnInner}>
-            <Text style={styles.recentreBtnIcon}>◎</Text>
+            <LocateFixed size={22} color="#1A73E8" strokeWidth={2.2} />
           </View>
         </TouchableOpacity>
       )}
@@ -3156,7 +3261,7 @@ export default function HomeScreen() {
             onPress={() => setSelectedEvent(null)}
             style={{ paddingLeft: 8 }}
           >
-            <Text style={styles.closeText}>✕</Text>
+            <X size={16} color="#999" strokeWidth={2.4} />
           </TouchableOpacity>
         </View>
       )}
@@ -3167,7 +3272,9 @@ export default function HomeScreen() {
           <View
             style={[
               styles.bottomSheet,
-              bottomSheetTall && styles.bottomSheetTall,
+              bottomSheetTall && {
+                maxHeight: Math.min(520, SCREEN_HEIGHT - keyboardHeight - 140),
+              },
             ]}
           >
             <ScrollView
@@ -3362,6 +3469,11 @@ const styles = StyleSheet.create({
     zIndex: 20,
   },
   reroutingOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -3400,15 +3512,15 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   muteBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: "rgba(255,255,255,0.18)",
-    justifyContent: "center",
+    flexDirection: "row",
     alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     marginLeft: 10,
   },
-  muteBtnText: { fontSize: 20 },
   navNextStrip: {
     flexDirection: "row",
     alignItems: "center",
@@ -3539,6 +3651,9 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   startNavBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     backgroundColor: "#1A73E8",
     borderRadius: 10,
     paddingHorizontal: 18,
@@ -3912,8 +4027,33 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 16,
   },
+  resultMatchHighlight: { fontWeight: "800", color: "#1a5c38" },
+  noResultsBox: { paddingVertical: 12 },
+  noResultsHint: {
+    fontSize: 12,
+    color: "#999",
+    textAlign: "center",
+    marginTop: 4,
+    marginBottom: 10,
+  },
+  noResultsChipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 8,
+  },
+  noResultsChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderWidth: 1.5,
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    marginBottom: 8,
+  },
+  noResultsChipText: { fontSize: 12, fontWeight: "600" },
   clearSearchBtn: { position: "absolute", right: 12, padding: 4 },
-  clearSearchText: { fontSize: 14, color: "#999" },
   suggestionsBox: {
     backgroundColor: "#fff",
     borderRadius: 14,
@@ -3994,7 +4134,6 @@ const styles = StyleSheet.create({
   eventLoc: { fontSize: 12, color: "#888" },
   eventDesc: { fontSize: 12, color: "#aaa", marginTop: 3 },
   dirArrow: { justifyContent: "center", paddingLeft: 8 },
-  dirArrowText: { fontSize: 22, color: "#ccc", fontWeight: "300" },
 
   arBtn: {
     flexDirection: "row",

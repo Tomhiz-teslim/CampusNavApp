@@ -1,6 +1,8 @@
 import React, { useEffect, useRef } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, Animated } from "react-native";
+import { ArrowRight, Building2, Calendar, Clock, Compass, MapPin, User, X } from "lucide-react-native";
 import { CATEGORY_COLORS } from "../lib/campusData";
+import { CATEGORY_ICON } from "../components/mapMarkers";
 import { haversineMetres } from "../lib/navUtils";
 
 export function SelectedLocationCard({
@@ -18,6 +20,14 @@ export function SelectedLocationCard({
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const colors = CATEGORY_COLORS[selected.category] || CATEGORY_COLORS.admin;
+  const Icon =
+    selected.category === "friend"
+      ? User
+      : selected.category === "event"
+        ? Calendar
+        : selected.category === "other"
+          ? MapPin
+          : CATEGORY_ICON[selected.category] || Building2;
 
   useEffect(() => {
     Animated.parallel([
@@ -111,7 +121,7 @@ export function SelectedLocationCard({
             { backgroundColor: colors.dot, borderColor: colors.pin + "33" },
           ]}
         >
-          <Text style={scStyles.iconText}>{selected.icon}</Text>
+          <Icon size={24} color={colors.pin} strokeWidth={2.2} />
         </View>
         <View style={scStyles.info}>
           <Text style={scStyles.name} numberOfLines={1}>
@@ -127,12 +137,14 @@ export function SelectedLocationCard({
             </View>
             {distLabel && (
               <View style={scStyles.distChip}>
-                <Text style={scStyles.distText}>📍 {distLabel}</Text>
+                <MapPin size={11} color="#555" strokeWidth={2.4} />
+                <Text style={scStyles.distText}>{distLabel}</Text>
               </View>
             )}
             {hoursText && (
               <View style={scStyles.hoursChip}>
-                <Text style={scStyles.hoursText}>🕐 {hoursText}</Text>
+                <Clock size={11} color="#1a5c38" strokeWidth={2.4} />
+                <Text style={scStyles.hoursText}>{hoursText}</Text>
               </View>
             )}
             {openStatus !== null && (
@@ -159,7 +171,7 @@ export function SelectedLocationCard({
           onPress={onClose}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Text style={scStyles.closeBtnText}>✕</Text>
+          <X size={14} color="#888" strokeWidth={2.4} />
         </TouchableOpacity>
       </View>
       <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
@@ -171,10 +183,15 @@ export function SelectedLocationCard({
           <View
             style={[scStyles.dirBtnGlow, { backgroundColor: "#1a5c3840" }]}
           />
-          <Text style={scStyles.dirBtnIcon}>🧭</Text>
+          <Compass
+            size={18}
+            color="#fff"
+            strokeWidth={2.2}
+            style={{ marginRight: 10 }}
+          />
           <Text style={scStyles.dirBtnText}>Get Directions</Text>
           <View style={scStyles.dirArrowCircle}>
-            <Text style={scStyles.dirArrowText}>→</Text>
+            <ArrowRight size={16} color="#fff" strokeWidth={2.4} />
           </View>
         </TouchableOpacity>
       </Animated.View>
@@ -236,6 +253,9 @@ const scStyles = StyleSheet.create({
     textTransform: "capitalize",
   },
   distChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
     backgroundColor: "#f0f0f0",
     borderRadius: 20,
     paddingHorizontal: 8,
@@ -243,6 +263,9 @@ const scStyles = StyleSheet.create({
   },
   distText: { fontSize: 11, color: "#555", fontWeight: "600" },
   hoursChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
     backgroundColor: "#f0f7f3",
     borderRadius: 20,
     paddingHorizontal: 8,
@@ -258,7 +281,6 @@ const scStyles = StyleSheet.create({
     alignItems: "center",
     marginLeft: 6,
   },
-  closeBtnText: { fontSize: 12, color: "#888", fontWeight: "700" },
   dirBtn: {
     flexDirection: "row",
     alignItems: "center",
