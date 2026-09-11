@@ -2093,6 +2093,7 @@ export default function HomeScreen() {
           <UserPlus size={14} color="#888" strokeWidth={2.4} />
           <Text style={styles.sectionLabelText}>Add Friend</Text>
         </View>
+        <View style={styles.addFriendCard}>
         <View style={styles.addFriendRow}>
           <TextInput
             style={styles.addFriendInput}
@@ -2114,6 +2115,7 @@ export default function HomeScreen() {
               <X size={14} color="#999" strokeWidth={2.4} />
             </TouchableOpacity>
           )}
+        </View>
         </View>
         {userSuggestions.length > 0 && (
           <View style={styles.suggestionsBox}>
@@ -2166,10 +2168,18 @@ export default function HomeScreen() {
         {friendRequests.length > 0 && (
           <>
             <View style={styles.tabTitleRow}>
-              <Bell size={14} color="#888" strokeWidth={2.4} />
-              <Text style={styles.sectionLabelText}>
-                Requests ({friendRequests.length})
-              </Text>
+              <Bell size={14} color="#d97706" strokeWidth={2.4} />
+              <Text style={styles.sectionLabelText}>Requests</Text>
+              <View style={[styles.tabCountBadge, styles.tabCountBadgeAmber]}>
+                <Text
+                  style={[
+                    styles.tabCountBadgeText,
+                    styles.tabCountBadgeTextAmber,
+                  ]}
+                >
+                  {friendRequests.length}
+                </Text>
+              </View>
             </View>
             {friendRequests.map((req) => (
               <View key={req.uid} style={styles.requestCard}>
@@ -2218,9 +2228,12 @@ export default function HomeScreen() {
 
         <View style={styles.tabTitleRow}>
           <View style={styles.onlineDot} />
-          <Text style={styles.sectionLabelText}>
-            My Friends ({friends.length})
-          </Text>
+          <Text style={styles.sectionLabelText}>My Friends</Text>
+          {friends.length > 0 && (
+            <View style={styles.tabCountBadge}>
+              <Text style={styles.tabCountBadgeText}>{friends.length}</Text>
+            </View>
+          )}
         </View>
         {!friendsLoaded ? (
           <TabSkeleton rows={3} />
@@ -2255,36 +2268,49 @@ export default function HomeScreen() {
               const loc = friendLocations.find((fl) => fl.uid === f.uid);
               return (
                 <View key={f.uid} style={styles.friendCard}>
-                  <View style={styles.friendAvatar}>
-                    {friendPhotos[f.uid] ? (
-                      <Image
-                        source={{
-                          uri: `data:image/jpeg;base64,${friendPhotos[f.uid]}`,
-                        }}
-                        style={styles.friendAvatarImg}
-                      />
-                    ) : (
-                      <Text style={styles.friendAvatarText}>
-                        {(f.name || "?")[0].toUpperCase()}
-                      </Text>
-                    )}
+                  <View style={styles.friendAvatarWrap}>
+                    <View style={styles.friendAvatar}>
+                      {friendPhotos[f.uid] ? (
+                        <Image
+                          source={{
+                            uri: `data:image/jpeg;base64,${friendPhotos[f.uid]}`,
+                          }}
+                          style={styles.friendAvatarImg}
+                        />
+                      ) : (
+                        <Text style={styles.friendAvatarText}>
+                          {(f.name || "?")[0].toUpperCase()}
+                        </Text>
+                      )}
+                    </View>
+                    {loc && <View style={styles.friendOnlineDot} />}
                   </View>
                   <View style={styles.friendInfo}>
                     <Text style={styles.friendName}>{f.name}</Text>
-                    <Text style={styles.friendEmail}>
-                      {loc && userLocation
-                        ? formatFriendDistance(
-                            haversineMetres(
-                              userLocation.latitude,
-                              userLocation.longitude,
-                              loc.latitude,
-                              loc.longitude,
-                            ),
-                          )
-                        : loc
-                          ? "Sharing location"
-                          : "Location hidden"}
-                    </Text>
+                    <View style={styles.friendMetaRow}>
+                      <View
+                        style={[
+                          styles.friendStatusDot,
+                          loc
+                            ? styles.friendStatusDotLive
+                            : styles.friendStatusDotHidden,
+                        ]}
+                      />
+                      <Text style={styles.friendEmail}>
+                        {loc && userLocation
+                          ? formatFriendDistance(
+                              haversineMetres(
+                                userLocation.latitude,
+                                userLocation.longitude,
+                                loc.latitude,
+                                loc.longitude,
+                              ),
+                            )
+                          : loc
+                            ? "Sharing location"
+                            : "Location hidden"}
+                      </Text>
+                    </View>
                   </View>
                   {loc && (
                     <TouchableOpacity
@@ -2359,7 +2385,7 @@ export default function HomeScreen() {
                         );
                       }}
                     >
-                      <Navigation size={16} color="#fff" strokeWidth={2.4} />
+                      <Navigation size={16} color="#1A73E8" strokeWidth={2.4} />
                     </TouchableOpacity>
                   )}
                   <TouchableOpacity
@@ -2383,9 +2409,12 @@ export default function HomeScreen() {
       <>
         <View style={styles.tabTitleRow}>
           <Calendar size={16} color="#1a5c38" strokeWidth={2.4} />
-          <Text style={styles.tabTitleText}>
-            Campus Events ({events.length})
-          </Text>
+          <Text style={styles.tabTitleText}>Campus Events</Text>
+          {events.length > 0 && (
+            <View style={styles.tabCountBadge}>
+              <Text style={styles.tabCountBadgeText}>{events.length}</Text>
+            </View>
+          )}
         </View>
         <ScrollView
           style={styles.buildingsList}
@@ -2404,6 +2433,7 @@ export default function HomeScreen() {
               <TouchableOpacity
                 key={ev.id}
                 style={styles.eventCard}
+                activeOpacity={0.75}
                 onPress={() => {
                   mapRef.current?.animateToRegion(
                     {
@@ -2418,18 +2448,25 @@ export default function HomeScreen() {
                   setActiveTab("home");
                 }}
               >
+                <View style={styles.eventAccentBar} />
                 <View style={styles.eventIconBox}>
                   <Calendar size={20} color="#d97706" strokeWidth={2.2} />
                 </View>
                 <View style={styles.eventInfo}>
-                  <Text style={styles.eventName}>{ev.name}</Text>
-                  <Text style={styles.eventDate}>
-                    {ev.date}
-                    {ev.time ? ` · ${ev.time}` : ""}
+                  <Text style={styles.eventName} numberOfLines={1}>
+                    {ev.name}
                   </Text>
+                  <View style={styles.eventDatePill}>
+                    <Text style={styles.eventDatePillText}>
+                      {ev.date}
+                      {ev.time ? ` · ${ev.time}` : ""}
+                    </Text>
+                  </View>
                   <View style={styles.eventLocRow}>
                     <MapPin size={11} color="#888" strokeWidth={2.2} />
-                    <Text style={styles.eventLoc}>{ev.locationName}</Text>
+                    <Text style={styles.eventLoc} numberOfLines={1}>
+                      {ev.locationName}
+                    </Text>
                   </View>
                   {ev.description ? (
                     <Text style={styles.eventDesc} numberOfLines={2}>
@@ -2438,7 +2475,7 @@ export default function HomeScreen() {
                   ) : null}
                 </View>
                 <View style={styles.dirArrow}>
-                  <ChevronRight size={20} color="#ccc" strokeWidth={2} />
+                  <ChevronRight size={18} color="#ccc" strokeWidth={2} />
                 </View>
               </TouchableOpacity>
             ))
@@ -3914,15 +3951,27 @@ const styles = StyleSheet.create({
   },
   sharingTitle: { fontSize: 14, fontWeight: "700", color: "#1a5c38" },
   sharingSub: { fontSize: 12, color: "#4a8c63", marginTop: 2 },
+  addFriendCard: {
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#eee",
+    padding: 4,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
   addFriendRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 10,
     position: "relative",
   },
   addFriendInput: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "transparent",
     borderRadius: 10,
     padding: 11,
     paddingRight: 36,
@@ -3941,6 +3990,18 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#888",
   },
+  tabCountBadge: {
+    backgroundColor: "#e8f5ee",
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 6,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  tabCountBadgeText: { color: "#1a5c38", fontSize: 11, fontWeight: "700" },
+  tabCountBadgeAmber: { backgroundColor: "#fef3c7" },
+  tabCountBadgeTextAmber: { color: "#b45309" },
   onlineDot: {
     width: 8,
     height: 8,
@@ -3950,75 +4011,103 @@ const styles = StyleSheet.create({
   requestCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#fff8e1",
-    borderRadius: 12,
-    padding: 10,
+    backgroundColor: "#fffdf6",
+    borderRadius: 14,
+    padding: 11,
     marginBottom: 8,
-    borderWidth: 1,
-    borderColor: "#ffe082",
+    borderWidth: 1.5,
+    borderColor: "#f5e2a8",
+    shadowColor: "#000",
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
   },
   friendCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#f9f9f9",
-    borderRadius: 12,
-    padding: 10,
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    padding: 11,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#f0f0f0",
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  friendAvatarWrap: { position: "relative", marginRight: 11 },
+  friendOnlineDot: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: "#2fae60",
+    borderWidth: 2,
+    borderColor: "#fff",
   },
   friendAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: "#1a5c38",
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 10,
   },
   friendAvatarText: { color: "#fff", fontWeight: "700", fontSize: 16 },
-  friendAvatarImg: { width: 38, height: 38, borderRadius: 19 },
+  friendAvatarImg: { width: 42, height: 42, borderRadius: 21 },
   friendInfo: { flex: 1 },
-  friendName: { fontSize: 14, fontWeight: "600", color: "#333" },
-  friendEmail: { fontSize: 12, color: "#888", marginTop: 2 },
+  friendName: { fontSize: 14, fontWeight: "700", color: "#1a1a1a" },
+  friendMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 3,
+  },
+  friendStatusDot: { width: 6, height: 6, borderRadius: 3 },
+  friendStatusDotLive: { backgroundColor: "#2fae60" },
+  friendStatusDotHidden: { backgroundColor: "#ccc" },
+  friendEmail: { fontSize: 12, color: "#888" },
   acceptBtn: {
     backgroundColor: "#1a5c38",
-    borderRadius: 8,
-    width: 32,
-    height: 32,
+    borderRadius: 17,
+    width: 34,
+    height: 34,
     justifyContent: "center",
     alignItems: "center",
     marginLeft: 6,
   },
   acceptBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
   declineBtn: {
-    backgroundColor: "#eee",
-    borderRadius: 8,
-    width: 32,
-    height: 32,
+    backgroundColor: "#f5f5f5",
+    borderRadius: 17,
+    width: 34,
+    height: 34,
     justifyContent: "center",
     alignItems: "center",
     marginLeft: 6,
   },
   declineBtnText: { color: "#888", fontWeight: "700", fontSize: 14 },
   locateBtn: {
-    backgroundColor: "#1a5c38",
+    backgroundColor: "#e8f0fe",
     borderRadius: 18,
     width: 36,
     height: 36,
     justifyContent: "center",
     alignItems: "center",
     marginLeft: 8,
-    shadowColor: "#1a5c38",
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
   },
   removeBtn: {
-    width: 26,
-    height: 26,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "#f5f5f5",
     justifyContent: "center",
     alignItems: "center",
-    marginLeft: 16,
+    marginLeft: 10,
   },
   emptyText: {
     fontSize: 13,
@@ -4104,9 +4193,28 @@ const styles = StyleSheet.create({
   eventCard: {
     flexDirection: "row",
     alignItems: "flex-start",
+    backgroundColor: "#fff",
+    borderRadius: 14,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
+    paddingLeft: 16,
+    paddingRight: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#f0f0f0",
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+    overflow: "hidden",
+  },
+  eventAccentBar: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+    backgroundColor: "#d97706",
   },
   eventIconBox: {
     width: 44,
@@ -4119,17 +4227,21 @@ const styles = StyleSheet.create({
   },
   eventInfo: { flex: 1 },
   eventName: { fontSize: 14, fontWeight: "700", color: "#1a1a1a" },
-  eventDate: {
-    fontSize: 12,
-    color: "#1a5c38",
-    fontWeight: "600",
-    marginTop: 2,
+  eventDatePill: {
+    alignSelf: "flex-start",
+    backgroundColor: "#fef3c7",
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginTop: 4,
+    marginBottom: 3,
   },
+  eventDatePillText: { fontSize: 11, color: "#b45309", fontWeight: "700" },
   eventLocRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    marginTop: 2,
+    marginTop: 1,
   },
   eventLoc: { fontSize: 12, color: "#888" },
   eventDesc: { fontSize: 12, color: "#aaa", marginTop: 3 },
