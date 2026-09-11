@@ -10,7 +10,34 @@ import {
   set,
   update,
 } from "firebase/database";
-import { useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  Bus,
+  Calendar,
+  CheckCircle2,
+  ChevronRight,
+  CreditCard,
+  GraduationCap,
+  Info,
+  Mail,
+  MapPin,
+  MessageCircle,
+  Pencil,
+  Phone,
+  Plus,
+  Satellite,
+  Save,
+  Search,
+  Settings,
+  ShoppingBag,
+  Trash2,
+  User,
+  Users,
+  Utensils,
+  X,
+  XCircle,
+} from "lucide-react-native";
+import { ComponentType, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -24,8 +51,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { auth, database } from "../lib/firebase";
 import ServicesTab from "../components/services";
+import { auth, database } from "../lib/firebase";
 
 // ── Hardcoded campus buildings (same as map screen) ──────────────────────────
 const BUILDINGS = [
@@ -1169,26 +1196,39 @@ function AdminPanel() {
 
       {/* Tabs */}
       <View style={styles.tabBar}>
-        {(["locations", "events", "users"] as AdminTab[]).map((tab) => (
-          <TouchableOpacity
-            key={tab}
-            style={[styles.tab, activeTab === tab && styles.tabActive]}
-            onPress={() => setActiveTab(tab)}
-          >
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === tab && styles.tabTextActive,
-              ]}
+        {(["locations", "events", "users"] as AdminTab[]).map((tab) => {
+          const TabIcon =
+            tab === "locations" ? MapPin : tab === "events" ? Calendar : Users;
+          const tabLabel =
+            tab === "locations"
+              ? `Locations${pendingCount > 0 ? ` (${pendingCount})` : ""}`
+              : tab === "events"
+                ? "Events"
+                : "Users";
+          return (
+            <TouchableOpacity
+              key={tab}
+              style={[styles.tab, activeTab === tab && styles.tabActive]}
+              onPress={() => setActiveTab(tab)}
             >
-              {tab === "locations"
-                ? `📍 Locations${pendingCount > 0 ? ` (${pendingCount})` : ""}`
-                : tab === "events"
-                  ? "🗓️ Events"
-                  : "👥 Users"}
-            </Text>
-          </TouchableOpacity>
-        ))}
+              <View style={styles.tabInner}>
+                <TabIcon
+                  size={14}
+                  color={activeTab === tab ? "#1a5c38" : "#999"}
+                  strokeWidth={2.4}
+                />
+                <Text
+                  style={[
+                    styles.tabText,
+                    activeTab === tab && styles.tabTextActive,
+                  ]}
+                >
+                  {tabLabel}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       {/* ── LOCATIONS TAB ── */}
@@ -1226,13 +1266,14 @@ function AdminPanel() {
               style={styles.toolbarAddBtn}
               onPress={openAddLocation}
             >
-              <Text style={styles.toolbarAddText}>＋ Add</Text>
+              <Plus size={14} color="#fff" strokeWidth={2.6} />
+              <Text style={styles.toolbarAddText}>Add</Text>
             </TouchableOpacity>
           </View>
           <ScrollView contentContainerStyle={styles.listContent}>
             {filteredLocations.length === 0 ? (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyIcon}>📍</Text>
+                <MapPin size={40} color="#ccc" strokeWidth={1.8} />
                 <Text style={styles.emptyText}>
                   No {locFilter === "all" ? "" : locFilter} locations
                 </Text>
@@ -1269,28 +1310,40 @@ function AdminPanel() {
                     </Text>
                   ) : null}
                   {(loc as any).submitterName ? (
-                    <Text style={styles.cardMeta}>
-                      👤 {(loc as any).submitterName}
-                    </Text>
+                    <View style={styles.cardMetaRow}>
+                      <User size={12} color="#888" strokeWidth={2.2} />
+                      <Text style={styles.cardMeta}>
+                        {(loc as any).submitterName}
+                      </Text>
+                    </View>
                   ) : null}
                   {loc.latitude ? (
-                    <Text style={styles.cardMeta}>
-                      📌 {loc.latitude?.toFixed(5)}, {loc.longitude?.toFixed(5)}
-                    </Text>
+                    <View style={styles.cardMetaRow}>
+                      <MapPin size={12} color="#888" strokeWidth={2.2} />
+                      <Text style={styles.cardMeta}>
+                        {loc.latitude?.toFixed(5)}, {loc.longitude?.toFixed(5)}
+                      </Text>
+                    </View>
                   ) : null}
                   <View style={styles.cardActions}>
                     <TouchableOpacity
                       style={[styles.actionBtn, styles.editBtn]}
                       onPress={() => openEditLocation(loc)}
                     >
-                      <Text style={styles.actionBtnText}>✏️ Edit</Text>
+                      <Pencil size={13} color="#fff" strokeWidth={2.4} />
+                      <Text style={styles.actionBtnText}>Edit</Text>
                     </TouchableOpacity>
                     {loc.status !== "approved" && (
                       <TouchableOpacity
                         style={[styles.actionBtn, styles.approveBtn]}
                         onPress={() => approveLocation(loc.id)}
                       >
-                        <Text style={styles.actionBtnText}>✅ Approve</Text>
+                        <CheckCircle2
+                          size={13}
+                          color="#fff"
+                          strokeWidth={2.4}
+                        />
+                        <Text style={styles.actionBtnText}>Approve</Text>
                       </TouchableOpacity>
                     )}
                     {loc.status !== "rejected" && (
@@ -1298,14 +1351,15 @@ function AdminPanel() {
                         style={[styles.actionBtn, styles.rejectBtn]}
                         onPress={() => rejectLocation(loc.id)}
                       >
-                        <Text style={styles.actionBtnText}>❌ Reject</Text>
+                        <XCircle size={13} color="#fff" strokeWidth={2.4} />
+                        <Text style={styles.actionBtnText}>Reject</Text>
                       </TouchableOpacity>
                     )}
                     <TouchableOpacity
                       style={[styles.actionBtn, styles.deleteBtn]}
                       onPress={() => deleteLocation(loc.id)}
                     >
-                      <Text style={styles.actionBtnText}>🗑️</Text>
+                      <Trash2 size={13} color="#fff" strokeWidth={2.4} />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -1324,7 +1378,7 @@ function AdminPanel() {
           <ScrollView contentContainerStyle={styles.listContent}>
             {events.length === 0 ? (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyIcon}>🗓️</Text>
+                <Calendar size={40} color="#ccc" strokeWidth={1.8} />
                 <Text style={styles.emptyText}>No events yet</Text>
               </View>
             ) : (
@@ -1363,30 +1417,41 @@ function AdminPanel() {
                     {ev.description ? (
                       <Text style={styles.cardDesc}>{ev.description}</Text>
                     ) : null}
-                    <Text style={styles.cardMeta}>
-                      📅 {formatEventDate(ev.date, ts)}
-                      {ev.time ? ` at ${ev.time}` : ""}
-                    </Text>
+                    <View style={styles.cardMetaRow}>
+                      <Calendar size={12} color="#888" strokeWidth={2.2} />
+                      <Text style={styles.cardMeta}>
+                        {formatEventDate(ev.date, ts)}
+                        {ev.time ? ` at ${ev.time}` : ""}
+                      </Text>
+                    </View>
                     {ev.location ? (
-                      <Text style={styles.cardMeta}>📍 {ev.location}</Text>
+                      <View style={styles.cardMetaRow}>
+                        <MapPin size={12} color="#888" strokeWidth={2.2} />
+                        <Text style={styles.cardMeta}>{ev.location}</Text>
+                      </View>
                     ) : null}
                     {ev.latitude ? (
-                      <Text style={styles.cardMeta}>
-                        📌 {ev.latitude?.toFixed(5)}, {ev.longitude?.toFixed(5)}
-                      </Text>
+                      <View style={styles.cardMetaRow}>
+                        <MapPin size={12} color="#888" strokeWidth={2.2} />
+                        <Text style={styles.cardMeta}>
+                          {ev.latitude?.toFixed(5)}, {ev.longitude?.toFixed(5)}
+                        </Text>
+                      </View>
                     ) : null}
                     <View style={styles.cardActions}>
                       <TouchableOpacity
                         style={[styles.actionBtn, styles.editBtn]}
                         onPress={() => openEditEvent(ev)}
                       >
-                        <Text style={styles.actionBtnText}>✏️ Edit</Text>
+                        <Pencil size={13} color="#fff" strokeWidth={2.4} />
+                        <Text style={styles.actionBtnText}>Edit</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={[styles.actionBtn, styles.deleteBtn]}
                         onPress={() => deleteEvent(ev.id)}
                       >
-                        <Text style={styles.actionBtnText}>🗑️ Delete</Text>
+                        <Trash2 size={13} color="#fff" strokeWidth={2.4} />
+                        <Text style={styles.actionBtnText}>Delete</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -1420,10 +1485,16 @@ function AdminPanel() {
                   </View>
                 </View>
                 {u.email ? (
-                  <Text style={styles.cardMeta}>✉️ {u.email}</Text>
+                  <View style={styles.cardMetaRow}>
+                    <Mail size={12} color="#888" strokeWidth={2.2} />
+                    <Text style={styles.cardMeta}>{u.email}</Text>
+                  </View>
                 ) : null}
                 {u.faculty ? (
-                  <Text style={styles.cardMeta}>🎓 {u.faculty}</Text>
+                  <View style={styles.cardMetaRow}>
+                    <GraduationCap size={12} color="#888" strokeWidth={2.2} />
+                    <Text style={styles.cardMeta}>{u.faculty}</Text>
+                  </View>
                 ) : null}
               </View>
             ))}
@@ -1549,24 +1620,28 @@ function AdminPanel() {
               ? (() => {
                   const ts = parseDateToTimestamp(eventForm.date.trim());
                   return ts ? (
-                    <View style={styles.dateParsedBox}>
+                    <View style={[styles.dateParsedBox, styles.dateBoxRow]}>
+                      <Calendar size={14} color="#1a5c38" strokeWidth={2.2} />
                       <Text style={styles.dateParsedText}>
-                        📅 Parsed as:{" "}
+                        Parsed as:{" "}
                         {new Date(ts).toLocaleDateString("en-GB", {
                           weekday: "long",
                           day: "numeric",
                           month: "long",
                           year: "numeric",
                         })}
-                        {ts >= Date.now()
-                          ? "  ✅ upcoming"
-                          : "  ⚠️ this date is in the past"}
+                        {ts >= Date.now() ? "  · upcoming" : "  · in the past"}
                       </Text>
                     </View>
                   ) : (
-                    <View style={styles.dateUnparsedBox}>
+                    <View style={[styles.dateUnparsedBox, styles.dateBoxRow]}>
+                      <AlertTriangle
+                        size={14}
+                        color="#b07d00"
+                        strokeWidth={2.2}
+                      />
                       <Text style={styles.dateUnparsedText}>
-                        ⚠️ Date not recognised — try: 2026-06-15
+                        Date not recognised — try: 2026-06-15
                       </Text>
                     </View>
                   );
@@ -1574,9 +1649,12 @@ function AdminPanel() {
               : null}
 
             <View style={styles.coordSectionBox}>
-              <Text style={styles.coordSectionTitle}>
-                📍 Event Location & Coordinates
-              </Text>
+              <View style={styles.coordSectionTitleRow}>
+                <MapPin size={15} color="#222" strokeWidth={2.2} />
+                <Text style={styles.coordSectionTitle}>
+                  Event Location & Coordinates
+                </Text>
+              </View>
               <Text style={styles.coordSectionSub}>
                 Choose how to set the event location
               </Text>
@@ -1584,10 +1662,14 @@ function AdminPanel() {
               <View style={styles.coordModeRow}>
                 {(
                   [
-                    { key: "search", label: "🔍 Search Map" },
-                    { key: "gps", label: "📡 GPS" },
-                    { key: "manual", label: "✍️ Manual" },
-                  ] as { key: CoordMode; label: string }[]
+                    { key: "search", label: "Search Map", Icon: Search },
+                    { key: "gps", label: "GPS", Icon: Satellite },
+                    { key: "manual", label: "Manual", Icon: Pencil },
+                  ] as {
+                    key: CoordMode;
+                    label: string;
+                    Icon: ComponentType<any>;
+                  }[]
                 ).map((m) => (
                   <TouchableOpacity
                     key={m.key}
@@ -1600,6 +1682,11 @@ function AdminPanel() {
                       setEventError("");
                     }}
                   >
+                    <m.Icon
+                      size={13}
+                      color={eventCoordMode === m.key ? "#fff" : "#555"}
+                      strokeWidth={2.3}
+                    />
                     <Text
                       style={[
                         styles.coordModeBtnText,
@@ -1717,9 +1804,16 @@ function AdminPanel() {
                     </View>
                   )}
                   {eventForm.latitude && eventForm.longitude ? (
-                    <View style={styles.coordConfirmed}>
+                    <View
+                      style={[styles.coordConfirmed, styles.coordConfirmedRow]}
+                    >
+                      <CheckCircle2
+                        size={14}
+                        color="#1a5c38"
+                        strokeWidth={2.2}
+                      />
                       <Text style={styles.coordConfirmedText}>
-                        ✅ {eventForm.location} —{" "}
+                        {eventForm.location} —{" "}
                         {parseFloat(eventForm.latitude).toFixed(5)},{" "}
                         {parseFloat(eventForm.longitude).toFixed(5)}
                       </Text>
@@ -1768,16 +1862,27 @@ function AdminPanel() {
                         </Text>
                       </>
                     ) : (
-                      <Text style={styles.gpsBtnText}>
-                        📡 Generate Coordinates from GPS
-                      </Text>
+                      <>
+                        <Satellite size={15} color="#fff" strokeWidth={2.2} />
+                        <Text style={styles.gpsBtnText}>
+                          {" "}
+                          Generate Coordinates from GPS
+                        </Text>
+                      </>
                     )}
                   </TouchableOpacity>
                   {eventForm.latitude && eventForm.longitude ? (
-                    <View style={styles.coordConfirmed}>
+                    <View
+                      style={[styles.coordConfirmed, styles.coordConfirmedRow]}
+                    >
+                      <CheckCircle2
+                        size={14}
+                        color="#1a5c38"
+                        strokeWidth={2.2}
+                      />
                       <Text style={styles.coordConfirmedText}>
-                        ✅ Captured: {parseFloat(eventForm.latitude).toFixed(6)}
-                        , {parseFloat(eventForm.longitude).toFixed(6)}
+                        Captured: {parseFloat(eventForm.latitude).toFixed(6)},{" "}
+                        {parseFloat(eventForm.longitude).toFixed(6)}
                       </Text>
                     </View>
                   ) : null}
@@ -1916,7 +2021,10 @@ function AdminPanel() {
             </ScrollView>
 
             <View style={styles.coordSectionBox}>
-              <Text style={styles.coordSectionTitle}>📌 Coordinates *</Text>
+              <View style={styles.coordSectionTitleRow}>
+                <MapPin size={15} color="#222" strokeWidth={2.2} />
+                <Text style={styles.coordSectionTitle}>Coordinates *</Text>
+              </View>
               <Text style={styles.coordSectionSub}>
                 Required for map directions
               </Text>
@@ -1924,9 +2032,13 @@ function AdminPanel() {
               <View style={styles.coordModeRow}>
                 {(
                   [
-                    { key: "gps", label: "📡 GPS" },
-                    { key: "manual", label: "✍️ Manual" },
-                  ] as { key: CoordMode; label: string }[]
+                    { key: "gps", label: "GPS", Icon: Satellite },
+                    { key: "manual", label: "Manual", Icon: Pencil },
+                  ] as {
+                    key: CoordMode;
+                    label: string;
+                    Icon: ComponentType<any>;
+                  }[]
                 ).map((m) => (
                   <TouchableOpacity
                     key={m.key}
@@ -1939,6 +2051,11 @@ function AdminPanel() {
                       setLocError("");
                     }}
                   >
+                    <m.Icon
+                      size={13}
+                      color={locCoordMode === m.key ? "#fff" : "#555"}
+                      strokeWidth={2.3}
+                    />
                     <Text
                       style={[
                         styles.coordModeBtnText,
@@ -1981,15 +2098,26 @@ function AdminPanel() {
                         </Text>
                       </>
                     ) : (
-                      <Text style={styles.gpsBtnText}>
-                        📡 Generate Coordinates from GPS
-                      </Text>
+                      <>
+                        <Satellite size={15} color="#fff" strokeWidth={2.2} />
+                        <Text style={styles.gpsBtnText}>
+                          {" "}
+                          Generate Coordinates from GPS
+                        </Text>
+                      </>
                     )}
                   </TouchableOpacity>
                   {locForm.latitude && locForm.longitude ? (
-                    <View style={styles.coordConfirmed}>
+                    <View
+                      style={[styles.coordConfirmed, styles.coordConfirmedRow]}
+                    >
+                      <CheckCircle2
+                        size={14}
+                        color="#1a5c38"
+                        strokeWidth={2.2}
+                      />
                       <Text style={styles.coordConfirmedText}>
-                        ✅ Captured: {parseFloat(locForm.latitude).toFixed(6)},{" "}
+                        Captured: {parseFloat(locForm.latitude).toFixed(6)},{" "}
                         {parseFloat(locForm.longitude).toFixed(6)}
                       </Text>
                     </View>
@@ -2050,28 +2178,44 @@ function UserAccount() {
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [form, setForm] = useState({
-    fullName: "", faculty: "", matricNo: "", phone: "",
+    fullName: "",
+    faculty: "",
+    matricNo: "",
+    phone: "",
   });
   const [showServices, setShowServices] = useState(false);
-  const [infoPanel, setInfoPanel] = useState<{ title: string; icon: string; body: string } | null>(null);
+  const [infoPanel, setInfoPanel] = useState<{
+    title: string;
+    icon: string;
+    body: string;
+  } | null>(null);
 
   const FACULTIES = [
-    "Engineering", "Science", "Arts", "Law", "Education",
-    "Business Admin.", "Social Sciences", "Medicine (CMS)",
-    "Pharmacy", "Environmental", "Dental Sciences", "Nursing",
+    "Engineering",
+    "Science",
+    "Arts",
+    "Law",
+    "Education",
+    "Business Admin.",
+    "Social Sciences",
+    "Medicine (CMS)",
+    "Pharmacy",
+    "Environmental",
+    "Dental Sciences",
+    "Nursing",
   ];
 
   useEffect(() => {
     if (!user) return;
-    const unsubscribe = onValue(ref(database, `users/${user.uid}`), snap => {
+    const unsubscribe = onValue(ref(database, `users/${user.uid}`), (snap) => {
       if (snap.exists()) {
         const d = snap.val();
         setUserData(d);
         setForm({
           fullName: d.fullName ?? "",
-          faculty:  d.faculty  ?? "",
+          faculty: d.faculty ?? "",
           matricNo: d.matricNo ?? "",
-          phone:    d.phone    ?? "",
+          phone: d.phone ?? "",
         });
       }
     });
@@ -2087,9 +2231,9 @@ function UserAccount() {
     try {
       await update(ref(database, `users/${user!.uid}`), {
         fullName: form.fullName.trim(),
-        faculty:  form.faculty.trim(),
+        faculty: form.faculty.trim(),
         matricNo: form.matricNo.trim(),
-        phone:    form.phone.trim(),
+        phone: form.phone.trim(),
         updatedAt: Date.now(),
       });
       setSaveSuccess(true);
@@ -2104,23 +2248,58 @@ function UserAccount() {
   function handleSignOut() {
     Alert.alert("Sign Out", "Are you sure you want to sign out?", [
       { text: "Cancel", style: "cancel" },
-      { text: "Sign Out", style: "destructive", onPress: async () => { await signOut(auth); router.replace("/login"); } },
+      {
+        text: "Sign Out",
+        style: "destructive",
+        onPress: async () => {
+          await signOut(auth);
+          router.replace("/login");
+        },
+      },
     ]);
   }
 
   const initials = userData?.fullName
-    ? userData.fullName.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase()
+    ? userData.fullName
+        .split(" ")
+        .map((w: string) => w[0])
+        .slice(0, 2)
+        .join("")
+        .toUpperCase()
     : "U";
 
   const CAMPUS_TOOLS: {
-    icon: string; label: string; sub: string;
-    route?: string; action?: () => void;
+    Icon: ComponentType<any>;
+    label: string;
+    sub: string;
+    route?: string;
+    action?: () => void;
     info?: { title: string; icon: string; body: string };
   }[] = [
-    { icon: "📍", label: "Submit a Location", sub: "Add a new campus spot to the map", route: "/submit-location" },
-    { icon: "🗓️", label: "Events",            sub: "Browse upcoming campus events",    route: "/events" },
-    { icon: "🍽️", label: "Find a Cafeteria",  sub: "Locate food spots near you",       route: "/cafeteria" },
-    { icon: "🚌", label: "Shuttle Routes",    sub: "Schedules, stops & directions",    route: "/shuttle" },
+    {
+      Icon: MapPin,
+      label: "Submit a Location",
+      sub: "Add a new campus spot to the map",
+      route: "/submit-location",
+    },
+    {
+      Icon: Calendar,
+      label: "Events",
+      sub: "Browse upcoming campus events",
+      route: "/events",
+    },
+    {
+      Icon: Utensils,
+      label: "Find a Cafeteria",
+      sub: "Locate food spots near you",
+      route: "/cafeteria",
+    },
+    {
+      Icon: Bus,
+      label: "Shuttle Routes",
+      sub: "Schedules, stops & directions",
+      route: "/shuttle",
+    },
   ];
 
   // Moved here from the Home screen's old "Services" tab, plus the
@@ -2129,39 +2308,53 @@ function UserAccount() {
   // open a lightweight in-app panel (there's no dedicated screen/data
   // source for these yet — see the handover notes).
   const FEATURES: {
-    icon: string; label: string; sub: string;
-    route?: string; action?: () => void;
+    Icon: ComponentType<any>;
+    label: string;
+    sub: string;
+    route?: string;
+    action?: () => void;
     info?: { title: string; icon: string; body: string };
   }[] = [
     {
-      icon: "🛍️", label: "Campus Services", sub: "Directory of services around campus",
+      Icon: ShoppingBag,
+      label: "Campus Services",
+      sub: "Directory of services around campus",
       action: () => setShowServices(true),
     },
     {
-      icon: "🚨", label: "Emergency Contacts", sub: "Security, health centre & wardens",
+      Icon: AlertTriangle,
+      label: "Emergency Contacts",
+      sub: "Security, health centre & wardens",
       route: "/emergency",
     },
     {
-      icon: "🔎", label: "Lost & Found", sub: "Report or search for lost items",
+      Icon: Search,
+      label: "Lost & Found",
+      sub: "Report or search for lost items",
       route: "/lostfound",
     },
     {
-      icon: "💬", label: "Help & Support", sub: "Get help using Compass",
+      Icon: MessageCircle,
+      label: "Help & Support",
+      sub: "Get help using Compass",
       route: "/help-support",
     },
     {
-      icon: "ℹ️", label: "About Compass", sub: "App info & version",
+      Icon: Info,
+      label: "About Compass",
+      sub: "App info & version",
       route: "/about",
     },
     {
-      icon: "⚙️", label: "Settings", sub: "Notifications & privacy",
+      Icon: Settings,
+      label: "Settings",
+      sub: "Notifications & privacy",
       route: "/settings",
     },
   ];
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.userContent}>
-
       {/* ── HERO TOP ── */}
       <View style={styles.profileHeader}>
         {/* decorative circles */}
@@ -2171,13 +2364,25 @@ function UserAccount() {
         {/* Edit / Save button */}
         <TouchableOpacity
           style={styles.heroEditBtn}
-          onPress={() => editing ? handleSave() : setEditing(true)}
+          onPress={() => (editing ? handleSave() : setEditing(true))}
           disabled={saving}
         >
-          {saving
-            ? <ActivityIndicator color="#fff" size="small" />
-            : <Text style={styles.heroEditBtnText}>{editing ? "💾 Save" : "✏️ Edit"}</Text>
-          }
+          {saving ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 5 }}
+            >
+              {editing ? (
+                <Save size={13} color="#fff" strokeWidth={2.4} />
+              ) : (
+                <Pencil size={13} color="#fff" strokeWidth={2.4} />
+              )}
+              <Text style={styles.heroEditBtnText}>
+                {editing ? "Save" : "Edit"}
+              </Text>
+            </View>
+          )}
         </TouchableOpacity>
 
         {/* Avatar */}
@@ -2192,7 +2397,7 @@ function UserAccount() {
           <TextInput
             style={styles.nameEditInput}
             value={form.fullName}
-            onChangeText={t => setForm(p => ({ ...p, fullName: t }))}
+            onChangeText={(t) => setForm((p) => ({ ...p, fullName: t }))}
             placeholder="Full Name"
             placeholderTextColor="rgba(255,255,255,0.5)"
             autoFocus
@@ -2205,14 +2410,30 @@ function UserAccount() {
 
         {/* Faculty + Matric badges */}
         <View style={styles.heroBadgeRow}>
-          {userData?.faculty  ? <View style={styles.heroBadge}><Text style={styles.heroBadgeText}>🎓 {userData.faculty}</Text></View>  : null}
-          {userData?.matricNo ? <View style={styles.heroBadge}><Text style={styles.heroBadgeText}>🪪 {userData.matricNo}</Text></View> : null}
-          {userData?.phone    ? <View style={styles.heroBadge}><Text style={styles.heroBadgeText}>📱 {userData.phone}</Text></View>    : null}
+          {userData?.faculty ? (
+            <View style={styles.heroBadge}>
+              <GraduationCap size={12} color="#fff" strokeWidth={2.4} />
+              <Text style={styles.heroBadgeText}>{userData.faculty}</Text>
+            </View>
+          ) : null}
+          {userData?.matricNo ? (
+            <View style={styles.heroBadge}>
+              <CreditCard size={12} color="#fff" strokeWidth={2.4} />
+              <Text style={styles.heroBadgeText}>{userData.matricNo}</Text>
+            </View>
+          ) : null}
+          {userData?.phone ? (
+            <View style={styles.heroBadge}>
+              <Phone size={12} color="#fff" strokeWidth={2.4} />
+              <Text style={styles.heroBadgeText}>{userData.phone}</Text>
+            </View>
+          ) : null}
         </View>
 
         {saveSuccess && (
           <View style={styles.heroSuccessToast}>
-            <Text style={styles.heroSuccessText}>✅ Profile updated!</Text>
+            <CheckCircle2 size={13} color="#fff" strokeWidth={2.4} />
+            <Text style={styles.heroSuccessText}>Profile updated!</Text>
           </View>
         )}
       </View>
@@ -2223,14 +2444,29 @@ function UserAccount() {
           <Text style={styles.editCardTitle}>Edit Your Details</Text>
 
           <Text style={styles.fieldLabel}>Faculty</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
-            {FACULTIES.map(f => (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{ marginBottom: 14 }}
+          >
+            {FACULTIES.map((f) => (
               <TouchableOpacity
                 key={f}
-                style={[styles.chip, form.faculty === f && styles.chipActive, { marginRight: 8 }]}
-                onPress={() => setForm(p => ({ ...p, faculty: f }))}
+                style={[
+                  styles.chip,
+                  form.faculty === f && styles.chipActive,
+                  { marginRight: 8 },
+                ]}
+                onPress={() => setForm((p) => ({ ...p, faculty: f }))}
               >
-                <Text style={[styles.chipText, form.faculty === f && styles.chipTextActive]}>{f}</Text>
+                <Text
+                  style={[
+                    styles.chipText,
+                    form.faculty === f && styles.chipTextActive,
+                  ]}
+                >
+                  {f}
+                </Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -2239,7 +2475,7 @@ function UserAccount() {
           <TextInput
             style={styles.fieldInput}
             value={form.matricNo}
-            onChangeText={t => setForm(p => ({ ...p, matricNo: t }))}
+            onChangeText={(t) => setForm((p) => ({ ...p, matricNo: t }))}
             placeholder="e.g. 190404001"
             placeholderTextColor="#bbb"
           />
@@ -2248,7 +2484,7 @@ function UserAccount() {
           <TextInput
             style={styles.fieldInput}
             value={form.phone}
-            onChangeText={t => setForm(p => ({ ...p, phone: t }))}
+            onChangeText={(t) => setForm((p) => ({ ...p, phone: t }))}
             placeholder="e.g. 08012345678"
             placeholderTextColor="#bbb"
             keyboardType="phone-pad"
@@ -2268,7 +2504,7 @@ function UserAccount() {
       {/* carry a `route`, so the shared onPress logic below still works. */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>CAMPUS TOOLS</Text>
-        {[...CAMPUS_TOOLS, ...FEATURES].map(item => (
+        {[...CAMPUS_TOOLS, ...FEATURES].map((item) => (
           <TouchableOpacity
             key={item.label}
             style={styles.featureRow}
@@ -2280,13 +2516,13 @@ function UserAccount() {
             }}
           >
             <View style={styles.featureIconWrap}>
-              <Text style={styles.featureIcon}>{item.icon}</Text>
+              <item.Icon size={20} color="#1a5c38" strokeWidth={2.2} />
             </View>
             <View style={styles.featureLabelWrap}>
               <Text style={styles.featureLabel}>{item.label}</Text>
               <Text style={styles.featureSub}>{item.sub}</Text>
             </View>
-            <Text style={styles.featureArrow}>›</Text>
+            <ChevronRight size={18} color="#ccc" strokeWidth={2.2} />
           </TouchableOpacity>
         ))}
       </View>
@@ -2297,32 +2533,49 @@ function UserAccount() {
       </TouchableOpacity>
 
       {/* Campus Services — full component, moved here from Home */}
-      <Modal visible={showServices} animationType="slide" onRequestClose={() => setShowServices(false)}>
+      <Modal
+        visible={showServices}
+        animationType="slide"
+        onRequestClose={() => setShowServices(false)}
+      >
         <View style={{ flex: 1, backgroundColor: "#fff" }}>
           <View style={styles.servicesModalHeader}>
             <Text style={styles.servicesModalHeaderTitle}>Campus Services</Text>
-            <TouchableOpacity onPress={() => setShowServices(false)} style={styles.servicesModalCloseBtn}>
-              <Text style={styles.servicesModalCloseText}>✕</Text>
+            <TouchableOpacity
+              onPress={() => setShowServices(false)}
+              style={styles.servicesModalCloseBtn}
+            >
+              <X size={16} color="#fff" strokeWidth={2.4} />
             </TouchableOpacity>
           </View>
-          <ServicesTab userId={user?.uid ?? ""} userName={userData?.fullName ?? ""} />
+          <ServicesTab
+            userId={user?.uid ?? ""}
+            userName={userData?.fullName ?? ""}
+          />
         </View>
       </Modal>
 
       {/* Simple info panel for the placeholder Features items */}
-      <Modal visible={!!infoPanel} transparent animationType="fade" onRequestClose={() => setInfoPanel(null)}>
+      <Modal
+        visible={!!infoPanel}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setInfoPanel(null)}
+      >
         <View style={styles.infoOverlay}>
           <View style={styles.infoCard}>
             <Text style={styles.infoIcon}>{infoPanel?.icon}</Text>
             <Text style={styles.infoTitle}>{infoPanel?.title}</Text>
             <Text style={styles.infoBody}>{infoPanel?.body}</Text>
-            <TouchableOpacity style={styles.infoCloseBtn} onPress={() => setInfoPanel(null)}>
+            <TouchableOpacity
+              style={styles.infoCloseBtn}
+              onPress={() => setInfoPanel(null)}
+            >
               <Text style={styles.infoCloseText}>Close</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
-
     </ScrollView>
   );
 }
@@ -2384,65 +2637,118 @@ const styles = StyleSheet.create({
     borderBottomColor: "#e8e8e8",
   },
   tab: { flex: 1, paddingVertical: 13, alignItems: "center" },
+  tabInner: { flexDirection: "row", alignItems: "center", gap: 5 },
   tabActive: { borderBottomWidth: 2.5, borderBottomColor: "#1a5c38" },
   tabText: { fontSize: 11, color: "#999", fontWeight: "600" },
   tabTextActive: { color: "#1a5c38" },
   // ── Improved profile hero ──────────────────────────────────────
   heroBubble1: {
-    position: "absolute", width: 200, height: 200, borderRadius: 100,
-    backgroundColor: "rgba(255,255,255,0.06)", top: -60, left: -60,
+    position: "absolute",
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    top: -60,
+    left: -60,
   },
   heroBubble2: {
-    position: "absolute", width: 150, height: 150, borderRadius: 75,
-    backgroundColor: "rgba(255,255,255,0.06)", bottom: -40, right: -30,
+    position: "absolute",
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    bottom: -40,
+    right: -30,
   },
   heroEditBtn: {
-    position: "absolute", top: 56, right: 20,
-    backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 20,
-    paddingHorizontal: 14, paddingVertical: 7,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.3)",
+    position: "absolute",
+    top: 56,
+    right: 20,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.3)",
   },
   heroEditBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
   avatarRing: {
-  width: 88,
-  height: 88,
-  borderRadius: 44,        // exactly half of 88 ✓
-  borderWidth: 3,
-  borderColor: "rgba(255,255,255,0.4)",
-  justifyContent: "center",
-  alignItems: "center",
-  marginBottom: 12,        // margin goes on the RING, not the inner avatar
-},
+    width: 88,
+    height: 88,
+    borderRadius: 44, // exactly half of 88 ✓
+    borderWidth: 3,
+    borderColor: "rgba(255,255,255,0.4)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 12, // margin goes on the RING, not the inner avatar
+  },
   nameEditInput: {
-    color: "#fff", fontSize: 20, fontWeight: "bold",
-    borderBottomWidth: 1.5, borderBottomColor: "rgba(255,255,255,0.5)",
-    paddingBottom: 4, marginBottom: 6, minWidth: 180, textAlign: "center",
+    color: "#fff",
+    fontSize: 20,
+    fontWeight: "bold",
+    borderBottomWidth: 1.5,
+    borderBottomColor: "rgba(255,255,255,0.5)",
+    paddingBottom: 4,
+    marginBottom: 6,
+    minWidth: 180,
+    textAlign: "center",
   },
   heroBadgeRow: {
-    flexDirection: "row", flexWrap: "wrap",
-    justifyContent: "center", gap: 8, marginTop: 10, paddingHorizontal: 20,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 10,
+    paddingHorizontal: 20,
   },
   heroBadge: {
-    backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 20,
-    paddingHorizontal: 12, paddingVertical: 5,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.2)",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
   },
   heroBadgeText: { color: "#fff", fontSize: 12, fontWeight: "600" },
   heroSuccessToast: {
-    backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 8,
-    paddingHorizontal: 14, paddingVertical: 7, marginTop: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    marginTop: 12,
   },
   heroSuccessText: { color: "#fff", fontSize: 13, fontWeight: "600" },
 
   // ── Edit form card ──────────────────────────────────────────
   editCard: {
-    margin: 16, backgroundColor: "#fff", borderRadius: 16, padding: 18,
-    shadowColor: "#000", shadowOpacity: 0.07, shadowRadius: 8, elevation: 3,
+    margin: 16,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 18,
+    shadowColor: "#000",
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  editCardTitle: { fontSize: 15, fontWeight: "700", color: "#1a5c38", marginBottom: 16 },
+  editCardTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#1a5c38",
+    marginBottom: 16,
+  },
   cancelEditBtn: {
-    marginTop: 4, padding: 13, borderRadius: 10,
-    borderWidth: 1.5, borderColor: "#eee", alignItems: "center",
+    marginTop: 4,
+    padding: 13,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: "#eee",
+    alignItems: "center",
   },
   cancelEditBtnText: { color: "#888", fontSize: 14, fontWeight: "600" },
 
@@ -2455,6 +2761,10 @@ const styles = StyleSheet.create({
   },
   filterRowContent: { paddingHorizontal: 12, paddingVertical: 10, gap: 8 },
   toolbarAddBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
     backgroundColor: "#1a5c38",
     borderRadius: 8,
     paddingHorizontal: 14,
@@ -2477,16 +2787,19 @@ const styles = StyleSheet.create({
   chipTextActive: { color: "#fff" },
 
   listContent: { padding: 16, gap: 12 },
-  emptyState: { alignItems: "center", paddingTop: 60 },
+  emptyState: { alignItems: "center", paddingTop: 60, gap: 12 },
   emptyIcon: { fontSize: 48, marginBottom: 12 },
   emptyText: { color: "#999", fontSize: 15 },
   sectionCount: { padding: 14, color: "#666", fontSize: 13 },
   addBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
     margin: 16,
     backgroundColor: "#1a5c38",
     borderRadius: 10,
     padding: 14,
-    alignItems: "center",
   },
   addBtnText: { color: "#fff", fontSize: 15, fontWeight: "bold" },
 
@@ -2513,14 +2826,35 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   cardDesc: { fontSize: 13, color: "#555", marginBottom: 6 },
-  cardMeta: { fontSize: 12, color: "#888", marginBottom: 3 },
+  cardMeta: { fontSize: 12, color: "#888" },
+  cardMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginBottom: 3,
+  },
   cardActions: {
     flexDirection: "row",
     gap: 8,
     marginTop: 12,
     flexWrap: "wrap",
   },
-  actionBtn: { borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7 },
+  actionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  dateParsedText: {
+    color: "#1a5c38",
+    fontSize: 12,
+    fontWeight: "600",
+    flex: 1,
+  },
+  dateBoxRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
   actionBtnText: { fontSize: 13, fontWeight: "600", color: "#fff" },
   approveBtn: { backgroundColor: "#1a5c38" },
   rejectBtn: { backgroundColor: "#d97706" },
@@ -2612,7 +2946,6 @@ const styles = StyleSheet.create({
     padding: 10,
     marginBottom: 12,
   },
-  dateParsedText: { color: "#1a5c38", fontSize: 12, fontWeight: "600" },
   dateUnparsedBox: {
     backgroundColor: "#fffbec",
     borderRadius: 8,
@@ -2635,12 +2968,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
     color: "#222",
+  },
+  coordSectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     marginBottom: 2,
   },
   coordSectionSub: { fontSize: 12, color: "#888", marginBottom: 14 },
   coordModeRow: { flexDirection: "row", gap: 8, marginBottom: 14 },
   coordModeBtn: {
     flex: 1,
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 5,
     paddingVertical: 9,
     borderRadius: 8,
     borderWidth: 1.5,
@@ -2670,7 +3011,13 @@ const styles = StyleSheet.create({
     padding: 10,
     marginTop: 4,
   },
-  coordConfirmedText: { color: "#1a5c38", fontSize: 13, fontWeight: "600" },
+  coordConfirmedText: {
+    color: "#1a5c38",
+    fontSize: 13,
+    fontWeight: "600",
+    flex: 1,
+  },
+  coordConfirmedRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   coordHint: { color: "#aaa", fontSize: 12, marginTop: 4, fontStyle: "italic" },
 
   searchResult: {
@@ -2722,8 +3069,8 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingBottom: 32,
     alignItems: "center",
-     position: "relative",   // ← add
-    overflow: "hidden",  
+    position: "relative", // ← add
+    overflow: "hidden",
   },
   avatar: {
     width: 76,
@@ -2782,30 +3129,60 @@ const styles = StyleSheet.create({
   featureArrow: { fontSize: 20, color: "#ccc", marginLeft: 8 },
 
   servicesModalHeader: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingTop: 55, paddingHorizontal: 16, paddingBottom: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingTop: 55,
+    paddingHorizontal: 16,
+    paddingBottom: 14,
     backgroundColor: "#1a5c38",
   },
   servicesModalHeaderTitle: { color: "#fff", fontSize: 18, fontWeight: "bold" },
   servicesModalCloseBtn: {
-    width: 32, height: 32, borderRadius: 16,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: "rgba(255,255,255,0.15)",
-    alignItems: "center", justifyContent: "center",
+    alignItems: "center",
+    justifyContent: "center",
   },
   servicesModalCloseText: { color: "#fff", fontSize: 16, fontWeight: "700" },
 
   infoOverlay: {
-    flex: 1, backgroundColor: "rgba(0,0,0,0.45)",
-    justifyContent: "center", alignItems: "center", paddingHorizontal: 28,
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 28,
   },
   infoCard: {
-    backgroundColor: "#fff", borderRadius: 18, padding: 24, width: "100%",
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    padding: 24,
+    width: "100%",
     alignItems: "center",
   },
   infoIcon: { fontSize: 34, marginBottom: 10 },
-  infoTitle: { fontSize: 17, fontWeight: "700", color: "#1a1a1a", marginBottom: 8, textAlign: "center" },
-  infoBody: { fontSize: 13, color: "#666", lineHeight: 19, textAlign: "center", marginBottom: 18 },
-  infoCloseBtn: { backgroundColor: "#1a5c38", borderRadius: 10, paddingVertical: 11, paddingHorizontal: 28 },
+  infoTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#1a1a1a",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  infoBody: {
+    fontSize: 13,
+    color: "#666",
+    lineHeight: 19,
+    textAlign: "center",
+    marginBottom: 18,
+  },
+  infoCloseBtn: {
+    backgroundColor: "#1a5c38",
+    borderRadius: 10,
+    paddingVertical: 11,
+    paddingHorizontal: 28,
+  },
   infoCloseText: { color: "#fff", fontSize: 14, fontWeight: "700" },
 
   signOutFullBtn: {
