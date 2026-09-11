@@ -2357,9 +2357,8 @@ function UserAccount() {
     <ScrollView style={styles.root} contentContainerStyle={styles.userContent}>
       {/* ── HERO TOP ── */}
       <View style={styles.profileHeader}>
-        {/* decorative circles */}
+        {/* decorative circle */}
         <View style={styles.heroBubble1} />
-        <View style={styles.heroBubble2} />
 
         {/* Edit / Save button */}
         <TouchableOpacity
@@ -2408,27 +2407,41 @@ function UserAccount() {
 
         <Text style={styles.profileEmail}>{user?.email}</Text>
 
-        {/* Faculty + Matric badges */}
-        <View style={styles.heroBadgeRow}>
-          {userData?.faculty ? (
-            <View style={styles.heroBadge}>
-              <GraduationCap size={12} color="#fff" strokeWidth={2.4} />
-              <Text style={styles.heroBadgeText}>{userData.faculty}</Text>
-            </View>
-          ) : null}
-          {userData?.matricNo ? (
-            <View style={styles.heroBadge}>
-              <CreditCard size={12} color="#fff" strokeWidth={2.4} />
-              <Text style={styles.heroBadgeText}>{userData.matricNo}</Text>
-            </View>
-          ) : null}
-          {userData?.phone ? (
-            <View style={styles.heroBadge}>
-              <Phone size={12} color="#fff" strokeWidth={2.4} />
-              <Text style={styles.heroBadgeText}>{userData.phone}</Text>
-            </View>
-          ) : null}
-        </View>
+        {/* Faculty / Matric / Phone — single quiet meta line */}
+        {(userData?.faculty || userData?.matricNo || userData?.phone) && (
+          <View style={styles.heroMetaRow}>
+            {userData?.faculty ? (
+              <View style={styles.heroMetaItem}>
+                <GraduationCap
+                  size={12}
+                  color="rgba(255,255,255,0.7)"
+                  strokeWidth={2.2}
+                />
+                <Text style={styles.heroMetaText}>{userData.faculty}</Text>
+              </View>
+            ) : null}
+            {userData?.matricNo ? (
+              <View style={styles.heroMetaItem}>
+                <CreditCard
+                  size={12}
+                  color="rgba(255,255,255,0.7)"
+                  strokeWidth={2.2}
+                />
+                <Text style={styles.heroMetaText}>{userData.matricNo}</Text>
+              </View>
+            ) : null}
+            {userData?.phone ? (
+              <View style={styles.heroMetaItem}>
+                <Phone
+                  size={12}
+                  color="rgba(255,255,255,0.7)"
+                  strokeWidth={2.2}
+                />
+                <Text style={styles.heroMetaText}>{userData.phone}</Text>
+              </View>
+            ) : null}
+          </View>
+        )}
 
         {saveSuccess && (
           <View style={styles.heroSuccessToast}>
@@ -2644,21 +2657,12 @@ const styles = StyleSheet.create({
   // ── Improved profile hero ──────────────────────────────────────
   heroBubble1: {
     position: "absolute",
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: "rgba(255,255,255,0.06)",
-    top: -60,
-    left: -60,
-  },
-  heroBubble2: {
-    position: "absolute",
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: "rgba(255,255,255,0.06)",
-    bottom: -40,
-    right: -30,
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    backgroundColor: "rgba(255,255,255,0.045)",
+    top: -100,
+    right: -90,
   },
   heroEditBtn: {
     position: "absolute",
@@ -2673,14 +2677,14 @@ const styles = StyleSheet.create({
   },
   heroEditBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
   avatarRing: {
-    width: 88,
-    height: 88,
-    borderRadius: 44, // exactly half of 88 ✓
-    borderWidth: 3,
-    borderColor: "rgba(255,255,255,0.4)",
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.3)",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 12, // margin goes on the RING, not the inner avatar
+    marginBottom: 14,
   },
   nameEditInput: {
     color: "#fff",
@@ -2693,26 +2697,25 @@ const styles = StyleSheet.create({
     minWidth: 180,
     textAlign: "center",
   },
-  heroBadgeRow: {
+  heroMetaRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "center",
-    gap: 8,
-    marginTop: 10,
-    paddingHorizontal: 20,
+    alignItems: "center",
+    gap: 14,
+    marginTop: 12,
+    paddingHorizontal: 24,
   },
-  heroBadge: {
+  heroMetaItem: {
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
   },
-  heroBadgeText: { color: "#fff", fontSize: 12, fontWeight: "600" },
+  heroMetaText: {
+    color: "rgba(255,255,255,0.85)",
+    fontSize: 12.5,
+    fontWeight: "600",
+  },
   heroSuccessToast: {
     flexDirection: "row",
     alignItems: "center",
@@ -3066,10 +3069,10 @@ const styles = StyleSheet.create({
   userContent: { paddingBottom: 40 },
   profileHeader: {
     backgroundColor: "#1a5c38",
-    paddingTop: 60,
-    paddingBottom: 32,
+    paddingTop: 58,
+    paddingBottom: 26,
     alignItems: "center",
-    position: "relative", // ← add
+    position: "relative",
     overflow: "hidden",
   },
   avatar: {
