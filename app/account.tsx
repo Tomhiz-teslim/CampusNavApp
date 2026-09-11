@@ -1516,8 +1516,18 @@ function AdminPanel() {
           behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
           <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowEventModal(false)}>
-              <Text style={styles.modalCancel}>Cancel</Text>
+            <TouchableOpacity
+              onPress={() => setShowEventModal(false)}
+              disabled={savingEvent}
+            >
+              <Text
+                style={[
+                  styles.modalCancel,
+                  savingEvent && styles.modalCancelDisabled,
+                ]}
+              >
+                Cancel
+              </Text>
             </TouchableOpacity>
             <Text style={styles.modalTitle}>
               {editingEvent ? "Edit Event" : "New Event"}
@@ -1947,8 +1957,18 @@ function AdminPanel() {
           behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
           <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowLocationModal(false)}>
-              <Text style={styles.modalCancel}>Cancel</Text>
+            <TouchableOpacity
+              onPress={() => setShowLocationModal(false)}
+              disabled={savingLoc}
+            >
+              <Text
+                style={[
+                  styles.modalCancel,
+                  savingLoc && styles.modalCancelDisabled,
+                ]}
+              >
+                Cancel
+              </Text>
             </TouchableOpacity>
             <Text style={styles.modalTitle}>
               {editingLocation ? "Edit Location" : "Add Location"}
@@ -2186,7 +2206,7 @@ function UserAccount() {
   const [showServices, setShowServices] = useState(false);
   const [infoPanel, setInfoPanel] = useState<{
     title: string;
-    icon: string;
+    Icon: ComponentType<any>;
     body: string;
   } | null>(null);
 
@@ -2274,7 +2294,7 @@ function UserAccount() {
     sub: string;
     route?: string;
     action?: () => void;
-    info?: { title: string; icon: string; body: string };
+    info?: { title: string; Icon: ComponentType<any>; body: string };
   }[] = [
     {
       Icon: MapPin,
@@ -2313,7 +2333,7 @@ function UserAccount() {
     sub: string;
     route?: string;
     action?: () => void;
-    info?: { title: string; icon: string; body: string };
+    info?: { title: string; Icon: ComponentType<any>; body: string };
   }[] = [
     {
       Icon: ShoppingBag,
@@ -2517,27 +2537,32 @@ function UserAccount() {
       {/* carry a `route`, so the shared onPress logic below still works. */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>CAMPUS TOOLS</Text>
-        {[...CAMPUS_TOOLS, ...FEATURES].map((item) => (
-          <TouchableOpacity
-            key={item.label}
-            style={styles.featureRow}
-            activeOpacity={0.7}
-            onPress={() => {
-              if (item.route) router.push(item.route as any);
-              else if (item.action) item.action();
-              else if (item.info) setInfoPanel(item.info);
-            }}
-          >
-            <View style={styles.featureIconWrap}>
-              <item.Icon size={20} color="#1a5c38" strokeWidth={2.2} />
-            </View>
-            <View style={styles.featureLabelWrap}>
-              <Text style={styles.featureLabel}>{item.label}</Text>
-              <Text style={styles.featureSub}>{item.sub}</Text>
-            </View>
-            <ChevronRight size={18} color="#ccc" strokeWidth={2.2} />
-          </TouchableOpacity>
-        ))}
+        <View style={styles.featureListCard}>
+          {[...CAMPUS_TOOLS, ...FEATURES].map((item, idx, arr) => (
+            <TouchableOpacity
+              key={item.label}
+              style={[
+                styles.featureRow,
+                idx === arr.length - 1 && styles.featureRowLast,
+              ]}
+              activeOpacity={0.7}
+              onPress={() => {
+                if (item.route) router.push(item.route as any);
+                else if (item.action) item.action();
+                else if (item.info) setInfoPanel(item.info);
+              }}
+            >
+              <View style={styles.featureIconWrap}>
+                <item.Icon size={20} color="#1a5c38" strokeWidth={2.2} />
+              </View>
+              <View style={styles.featureLabelWrap}>
+                <Text style={styles.featureLabel}>{item.label}</Text>
+                <Text style={styles.featureSub}>{item.sub}</Text>
+              </View>
+              <ChevronRight size={18} color="#ccc" strokeWidth={2.2} />
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
 
       {/* ── SIGN OUT (unchanged) ── */}
@@ -2549,11 +2574,19 @@ function UserAccount() {
       <Modal
         visible={showServices}
         animationType="slide"
+        presentationStyle="pageSheet"
         onRequestClose={() => setShowServices(false)}
       >
         <View style={{ flex: 1, backgroundColor: "#fff" }}>
           <View style={styles.servicesModalHeader}>
-            <Text style={styles.servicesModalHeaderTitle}>Campus Services</Text>
+            <View style={styles.servicesModalHeaderLeft}>
+              <View style={styles.servicesModalIconBox}>
+                <ShoppingBag size={16} color="#fff" strokeWidth={2.2} />
+              </View>
+              <Text style={styles.servicesModalHeaderTitle}>
+                Campus Services
+              </Text>
+            </View>
             <TouchableOpacity
               onPress={() => setShowServices(false)}
               style={styles.servicesModalCloseBtn}
@@ -2577,7 +2610,11 @@ function UserAccount() {
       >
         <View style={styles.infoOverlay}>
           <View style={styles.infoCard}>
-            <Text style={styles.infoIcon}>{infoPanel?.icon}</Text>
+            {infoPanel?.Icon && (
+              <View style={styles.infoIconBox}>
+                <infoPanel.Icon size={24} color="#1a5c38" strokeWidth={2.2} />
+              </View>
+            )}
             <Text style={styles.infoTitle}>{infoPanel?.title}</Text>
             <Text style={styles.infoBody}>{infoPanel?.body}</Text>
             <TouchableOpacity
@@ -2666,14 +2703,12 @@ const styles = StyleSheet.create({
   },
   heroEditBtn: {
     position: "absolute",
-    top: 56,
+    top: 58,
     right: 20,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    borderRadius: 20,
-    paddingHorizontal: 14,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    borderRadius: 10,
+    paddingHorizontal: 13,
     paddingVertical: 7,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.3)",
   },
   heroEditBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
   avatarRing: {
@@ -2906,13 +2941,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: "#eee",
     backgroundColor: "#fff",
   },
   modalTitle: { fontSize: 17, fontWeight: "700", color: "#222" },
   modalCancel: { color: "#888", fontSize: 15 },
+  modalCancelDisabled: { color: "#ccc" },
   modalSave: { color: "#1a5c38", fontSize: 15, fontWeight: "700" },
   modalBody: { flex: 1, backgroundColor: "#f5f5f5", padding: 16 },
   fieldLabel: {
@@ -3104,21 +3141,24 @@ const styles = StyleSheet.create({
 
   featureRow: {
     backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 4,
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 8,
-    elevation: 1,
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+  },
+  featureListCard: {
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: "#f0f0f0",
   },
+  featureRowLast: { borderBottomWidth: 0 },
   featureIconWrap: {
-    width: 42,
-    height: 42,
+    width: 38,
+    height: 38,
     borderRadius: 10,
     backgroundColor: "#f0faf4",
     justifyContent: "center",
@@ -3135,12 +3175,25 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingTop: 55,
-    paddingHorizontal: 16,
-    paddingBottom: 14,
+    paddingTop: 18,
+    paddingHorizontal: 18,
+    paddingBottom: 16,
     backgroundColor: "#1a5c38",
   },
-  servicesModalHeaderTitle: { color: "#fff", fontSize: 18, fontWeight: "bold" },
+  servicesModalHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  servicesModalIconBox: {
+    width: 30,
+    height: 30,
+    borderRadius: 9,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  servicesModalHeaderTitle: { color: "#fff", fontSize: 17, fontWeight: "700" },
   servicesModalCloseBtn: {
     width: 32,
     height: 32,
@@ -3165,7 +3218,15 @@ const styles = StyleSheet.create({
     width: "100%",
     alignItems: "center",
   },
-  infoIcon: { fontSize: 34, marginBottom: 10 },
+  infoIconBox: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: "#f0faf4",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 14,
+  },
   infoTitle: {
     fontSize: 17,
     fontWeight: "700",
@@ -3181,21 +3242,17 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   infoCloseBtn: {
-    backgroundColor: "#1a5c38",
-    borderRadius: 10,
     paddingVertical: 11,
     paddingHorizontal: 28,
   },
-  infoCloseText: { color: "#fff", fontSize: 14, fontWeight: "700" },
+  infoCloseText: { color: "#1a5c38", fontSize: 14, fontWeight: "700" },
 
   signOutFullBtn: {
-    margin: 16,
-    borderRadius: 12,
-    padding: 16,
+    marginHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 16,
+    paddingVertical: 14,
     alignItems: "center",
-    backgroundColor: "#fff",
-    borderWidth: 1.5,
-    borderColor: "#ffcccc",
   },
-  signOutFullText: { color: "#cc2222", fontSize: 15, fontWeight: "700" },
+  signOutFullText: { color: "#cc2222", fontSize: 14, fontWeight: "600" },
 });
