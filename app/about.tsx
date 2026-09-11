@@ -10,34 +10,57 @@ import {
   Animated,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { ComponentType } from "react";
+import {
+  Bus,
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Compass,
+  Flag,
+  Footprints,
+  GraduationCap,
+  Instagram,
+  Link2,
+  Linkedin,
+  Map,
+  MapPin,
+  Mail,
+  Search,
+  ShoppingBag,
+  Sparkles,
+  Target,
+  Utensils,
+} from "lucide-react-native";
 
 // Bump this with each release — there's no auto-versioning wired up yet.
 const APP_VERSION = "1.0.0";
 
-const FEATURES = [
-  { icon: "🗺️", label: "Interactive Campus Map", sub: "Explore UNILAG visually, in real time" },
-  { icon: "🧭", label: "Smart Navigation", sub: "Turn-by-turn directions to any spot" },
-  { icon: "🗓️", label: "Campus Events", sub: "Never miss what's happening on campus" },
-  { icon: "🔎", label: "Lost & Found", sub: "Report or search for lost items" },
-  { icon: "🛍️", label: "Campus Services", sub: "Discover services offered by students" },
-  { icon: "🍽️", label: "Cafeteria Info", sub: "Find food spots near you" },
-  { icon: "🚌", label: "Shuttle Info", sub: "Routes, stops & schedules" },
-  { icon: "📍", label: "Key Campus Locations", sub: "Halls, faculties, offices & more" },
-  { icon: "✨", label: "Student-Friendly Design", sub: "Simple, fast, and built for you" },
+const FEATURES: { icon: ComponentType<any>; label: string; sub: string }[] = [
+  { icon: Map, label: "Interactive Campus Map", sub: "Explore UNILAG visually, in real time" },
+  { icon: Compass, label: "Smart Navigation", sub: "Turn-by-turn directions to any spot" },
+  { icon: Calendar, label: "Campus Events", sub: "Never miss what's happening on campus" },
+  { icon: Search, label: "Lost & Found", sub: "Report or search for lost items" },
+  { icon: ShoppingBag, label: "Campus Services", sub: "Discover services offered by students" },
+  { icon: Utensils, label: "Cafeteria Info", sub: "Find food spots near you" },
+  { icon: Bus, label: "Shuttle Info", sub: "Routes, stops & schedules" },
+  { icon: MapPin, label: "Key Campus Locations", sub: "Halls, faculties, offices & more" },
+  { icon: Sparkles, label: "Student-Friendly Design", sub: "Simple, fast, and built for you" },
 ];
 
-const WHY_US = [
-  { icon: "⏱️", text: "Saves time finding locations" },
-  { icon: "🎓", text: "Helps new students settle in quickly" },
-  { icon: "🚶", text: "Makes campus exploration easier" },
-  { icon: "🔗", text: "Connects students with campus services" },
-  { icon: "🇳🇬", text: "Built specifically for Nigerian universities" },
+const WHY_US: { icon: ComponentType<any>; text: string }[] = [
+  { icon: Clock, text: "Saves time finding locations" },
+  { icon: GraduationCap, text: "Helps new students settle in quickly" },
+  { icon: Footprints, text: "Makes campus exploration easier" },
+  { icon: Link2, text: "Connects students with campus services" },
+  { icon: Flag, text: "Built specifically for Nigerian universities" },
 ];
 
-const CONTACT = [
-  { icon: "✉️", label: "Email", value: "support@campusnav.app", url: "mailto: tomhizb12@gmail.com" },
-  { icon: "📷", label: "Instagram", value: "@campusnav", url: "https://instagram.com/campusnav" },
-  { icon: "💼", label: "LinkedIn", value: "Even Tech", url: "https://linkedin.com/company/eventech" },
+const CONTACT: { icon: ComponentType<any>; label: string; value: string; url: string }[] = [
+  { icon: Mail, label: "Email", value: "support@campusnav.app", url: "mailto: tomhizb12@gmail.com" },
+  { icon: Instagram, label: "Instagram", value: "@campusnav", url: "https://instagram.com/campusnav" },
+  { icon: Linkedin, label: "LinkedIn", value: "Even Tech", url: "https://linkedin.com/company/eventech" },
 ];
 
 export default function AboutScreen() {
@@ -70,7 +93,7 @@ export default function AboutScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backIcon}>←</Text>
+          <ChevronLeft size={20} color="#fff" strokeWidth={2.4} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>About CampusNav</Text>
         <View style={{ width: 36 }} />
@@ -109,7 +132,7 @@ export default function AboutScreen() {
           {/* 2. Our Mission */}
           <Text style={styles.sectionTitle}>OUR MISSION</Text>
           <View style={[styles.card, styles.missionCard]}>
-            <Text style={styles.missionIcon}>🎯</Text>
+            <Target size={22} color={GREEN} strokeWidth={2} style={{ marginTop: 1 }} />
             <Text style={[styles.cardText, { flex: 1 }]}>
               CampusNav exists to make campus life easier — helping students navigate
               confidently, discover campus services, and stay connected with useful
@@ -123,7 +146,7 @@ export default function AboutScreen() {
             {FEATURES.map((f) => (
               <View key={f.label} style={styles.featureCard}>
                 <View style={styles.featureIconWrap}>
-                  <Text style={styles.featureIcon}>{f.icon}</Text>
+                  <f.icon size={19} color={GREEN} strokeWidth={2.1} />
                 </View>
                 <Text style={styles.featureLabel}>{f.label}</Text>
                 <Text style={styles.featureSub}>{f.sub}</Text>
@@ -142,7 +165,7 @@ export default function AboutScreen() {
                   i === WHY_US.length - 1 && { borderBottomWidth: 0, marginBottom: 0, paddingBottom: 0 },
                 ]}
               >
-                <Text style={styles.whyIcon}>{w.icon}</Text>
+                <w.icon size={17} color={GREEN} strokeWidth={2.1} style={{ width: 24 }} />
                 <Text style={styles.whyText}>{w.text}</Text>
               </View>
             ))}
@@ -179,13 +202,13 @@ export default function AboutScreen() {
                 activeOpacity={0.7}
               >
                 <View style={styles.contactIconWrap}>
-                  <Text style={styles.contactIcon}>{c.icon}</Text>
+                  <c.icon size={17} color={GREEN} strokeWidth={2.1} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.contactLabel}>{c.label}</Text>
                   <Text style={styles.contactValue}>{c.value}</Text>
                 </View>
-                <Text style={styles.contactArrow}>›</Text>
+                <ChevronRight size={18} color="#ccc" strokeWidth={2.2} />
               </TouchableOpacity>
             ))}
           </View>
@@ -270,7 +293,6 @@ const styles = StyleSheet.create({
   cardText: { fontSize: 14, color: "#555", lineHeight: 21 },
 
   missionCard: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
-  missionIcon: { fontSize: 22, marginTop: 1 },
 
   // Feature cards grid
   featuresGrid: {
@@ -301,7 +323,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 10,
   },
-  featureIcon: { fontSize: 19 },
   featureLabel: { fontSize: 13.5, fontWeight: "700", color: "#222", marginBottom: 3 },
   featureSub: { fontSize: 11.5, color: "#999", lineHeight: 15 },
 
@@ -314,7 +335,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#f5f5f5",
   },
-  whyIcon: { fontSize: 18, width: 24, textAlign: "center" },
   whyText: { fontSize: 14, color: "#333", fontWeight: "500", flex: 1 },
 
   infoLine: {
@@ -345,10 +365,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  contactIcon: { fontSize: 17 },
   contactLabel: { fontSize: 12, color: "#999", fontWeight: "600" },
   contactValue: { fontSize: 14, color: "#222", fontWeight: "600", marginTop: 1 },
-  contactArrow: { fontSize: 20, color: "#ccc" },
 
   footerNote: {
     fontSize: 12,

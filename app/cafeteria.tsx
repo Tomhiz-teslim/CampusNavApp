@@ -9,6 +9,14 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import * as Location from "expo-location";
+import {
+  Clock,
+  ChevronLeft,
+  MapPin,
+  Navigation,
+  Utensils,
+  Zap,
+} from "lucide-react-native";
 
 interface Cafeteria {
   id: string;
@@ -131,10 +139,15 @@ export default function CafeteriaScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backIcon}>←</Text>
+          <ChevronLeft size={22} color="#fff" strokeWidth={2.4} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Campus Cafeterias</Text>
-        <View style={{ width: 36 }} />
+        <View style={styles.headerTitleRow}>
+          <View style={styles.headerIconBox}>
+            <Utensils size={15} color="#fff" strokeWidth={2.2} />
+          </View>
+          <Text style={styles.headerTitle}>Campus Cafeterias</Text>
+        </View>
+        <View style={{ width: 34 }} />
       </View>
 
       {/* Location banner */}
@@ -142,12 +155,15 @@ export default function CafeteriaScreen() {
         {locating ? (
           <View style={styles.bannerRow}>
             <ActivityIndicator size="small" color="#fff" />
-            <Text style={styles.bannerText}>  Locating you…</Text>
+            <Text style={styles.bannerText}>Locating you…</Text>
           </View>
         ) : userLoc ? (
-          <Text style={styles.bannerText}>📍 Showing nearest cafeteria first</Text>
+          <View style={styles.bannerRow}>
+            <MapPin size={14} color="#fff" strokeWidth={2.4} />
+            <Text style={styles.bannerText}>Showing nearest cafeteria first</Text>
+          </View>
         ) : (
-          <Text style={styles.bannerText}>⚠️ Enable location for distance info</Text>
+          <Text style={styles.bannerText}>Enable location for distance info</Text>
         )}
       </View>
 
@@ -158,17 +174,21 @@ export default function CafeteriaScreen() {
             <View key={caf.id} style={[styles.card, isClosest && styles.cardClosest]}>
               {isClosest && (
                 <View style={styles.closestBadge}>
-                  <Text style={styles.closestBadgeText}>⚡ Closest to you</Text>
+                  <Zap size={11} color="#1A5C38" strokeWidth={2.6} />
+                  <Text style={styles.closestBadgeText}>Closest to you</Text>
                 </View>
               )}
 
               <View style={styles.cardHeader}>
                 <View style={styles.iconCircle}>
-                  <Text style={styles.iconEmoji}>🍽️</Text>
+                  <Utensils size={20} color="#1A5C38" strokeWidth={2.2} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.cafName}>{caf.name}</Text>
-                  <Text style={styles.cafHours}>🕐 {caf.hours}</Text>
+                  <View style={styles.cafHoursRow}>
+                    <Clock size={11} color="#999" strokeWidth={2.2} />
+                    <Text style={styles.cafHours}>{caf.hours}</Text>
+                  </View>
                 </View>
                 {caf.dist !== null && (
                   <View style={styles.distBadge}>
@@ -189,10 +209,12 @@ export default function CafeteriaScreen() {
               </View>
 
               <TouchableOpacity
-                style={[styles.dirBtn, isClosest && styles.dirBtnClosest]}
+                style={styles.dirBtn}
                 onPress={() => handleDirections(caf)}
+                activeOpacity={0.75}
               >
-                <Text style={styles.dirBtnText}>🗺️  Get Directions</Text>
+                <Navigation size={14} color="#1a5c38" strokeWidth={2.4} />
+                <Text style={styles.dirBtnText}>Get Directions</Text>
               </TouchableOpacity>
             </View>
           );
@@ -216,12 +238,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   backBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.15)",
+    width: 34, height: 34,
     alignItems: "center", justifyContent: "center",
   },
-  backIcon: { color: "#fff", fontSize: 18, fontWeight: "bold" },
-  headerTitle: { color: "#fff", fontSize: 20, fontWeight: "700" },
+  headerTitleRow: { flexDirection: "row", alignItems: "center", gap: 9 },
+  headerIconBox: {
+    width: 26, height: 26, borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    alignItems: "center", justifyContent: "center",
+  },
+  headerTitle: { color: "#fff", fontSize: 18, fontWeight: "700" },
 
   banner: {
     backgroundColor: "#2ECC71",
@@ -248,6 +274,9 @@ const styles = StyleSheet.create({
   cardClosest: { borderLeftColor: "#2ECC71", borderWidth: 1.5, borderColor: "#2ECC71" },
 
   closestBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
     backgroundColor: "#E8F8F0",
     alignSelf: "flex-start",
     paddingHorizontal: 10,
@@ -259,14 +288,14 @@ const styles = StyleSheet.create({
 
   cardHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 10 },
   iconCircle: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: "#E8F8F0",
+    width: 44, height: 44, borderRadius: 12,
+    backgroundColor: "#f0faf4",
     alignItems: "center", justifyContent: "center",
   },
-  iconEmoji: { fontSize: 22 },
 
   cafName: { fontSize: 16, fontWeight: "700", color: "#1A1A1A" },
-  cafHours: { fontSize: 12, color: "#888", marginTop: 2 },
+  cafHoursRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 3 },
+  cafHours: { fontSize: 12, color: "#888" },
 
   distBadge: {
     backgroundColor: "#F0F4F0",
@@ -288,11 +317,13 @@ const styles = StyleSheet.create({
   tagText: { fontSize: 12, color: "#1A5C38", fontWeight: "500" },
 
   dirBtn: {
-    backgroundColor: "#1A5C38",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#f0faf4",
     borderRadius: 10,
     paddingVertical: 10,
-    alignItems: "center",
   },
-  dirBtnClosest: { backgroundColor: "#2ECC71" },
-  dirBtnText: { color: "#fff", fontSize: 14, fontWeight: "600" },
+  dirBtnText: { color: "#1a5c38", fontSize: 13.5, fontWeight: "700" },
 });

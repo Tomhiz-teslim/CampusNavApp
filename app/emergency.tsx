@@ -12,6 +12,16 @@ import {
 import { useRouter } from "expo-router";
 import { database } from "../lib/firebase";
 import { ref, onValue } from "firebase/database";
+import { ComponentType } from "react";
+import {
+  AlertTriangle,
+  ChevronLeft,
+  Home,
+  Phone,
+  ShieldAlert,
+  Siren,
+  Stethoscope,
+} from "lucide-react-native";
 
 // ── Emergency Contacts (fallback defaults) ──────────────────────────────────
 // Real numbers should live in the Firebase `emergencyContacts` node so
@@ -46,6 +56,14 @@ const DEFAULT_EMERGENCY_CONTACTS: EmergencyGroup[] = [
     ],
   },
 ];
+
+function getCategoryIcon(category?: string): ComponentType<any> {
+  const c = (category || "").toLowerCase();
+  if (c.includes("security")) return Siren;
+  if (c.includes("health") || c.includes("medical")) return Stethoscope;
+  if (c.includes("warden") || c.includes("hall")) return Home;
+  return ShieldAlert;
+}
 
 export default function EmergencyScreen() {
   const router = useRouter();
@@ -127,10 +145,15 @@ export default function EmergencyScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backIcon}>←</Text>
+          <ChevronLeft size={22} color="#fff" strokeWidth={2.4} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Emergency Contacts</Text>
-        <View style={{ width: 36 }} />
+        <View style={styles.headerTitleRow}>
+          <View style={styles.headerIconBox}>
+            <ShieldAlert size={15} color="#fff" strokeWidth={2.2} />
+          </View>
+          <Text style={styles.headerTitle}>Emergency Contacts</Text>
+        </View>
+        <View style={{ width: 34 }} />
       </View>
 
       {loading ? (
@@ -141,7 +164,9 @@ export default function EmergencyScreen() {
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           {sosContact && (
             <TouchableOpacity style={styles.sosBtn} onPress={() => call(sosContact.number)} activeOpacity={0.85}>
-              <Text style={styles.sosBtnIcon}>🆘</Text>
+              <View style={styles.sosBtnIconBox}>
+                <Siren size={24} color="#fff" strokeWidth={2.2} />
+              </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.sosBtnTitle}>Emergency — Call Security Now</Text>
                 <Text style={styles.sosBtnSub}>{sosContact.name}</Text>
@@ -151,38 +176,44 @@ export default function EmergencyScreen() {
 
           {usingDefaults && (
             <View style={styles.notice}>
+              <AlertTriangle size={14} color="#b07d00" strokeWidth={2.2} />
               <Text style={styles.noticeText}>
                 {loadError
-                  ? "⚠️ Couldn't reach the server — showing placeholder numbers. Check your connection and reopen this screen to retry."
-                  : "⚠️ These are placeholder numbers. An admin needs to add real contacts to the `emergencyContacts` node in Firebase."}
+                  ? "Couldn't reach the server — showing placeholder numbers. Check your connection and reopen this screen to retry."
+                  : "These are placeholder numbers. An admin needs to add real contacts to the `emergencyContacts` node in Firebase."}
               </Text>
             </View>
           )}
 
-          {groups.map((group, gi) => (
-            <View key={group.category ?? gi} style={styles.group}>
-              <Text style={styles.groupTitle}>
-                {group.icon} {group.category}
-              </Text>
-              {group.contacts?.map((c, ci) => (
-                <TouchableOpacity
-                  key={c.id ?? ci}
-                  style={styles.contactRow}
-                  activeOpacity={0.7}
-                  onPress={() => call(c.number)}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.contactName}>{c.name}</Text>
-                    {c.sub ? <Text style={styles.contactSub}>{c.sub}</Text> : null}
-                    <Text style={styles.contactNumber}>{c.number}</Text>
-                  </View>
-                  <View style={styles.callBtn}>
-                    <Text style={styles.callBtnText}>📞 Call</Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
-          ))}
+          {groups.map((group, gi) => {
+            const GroupIcon = getCategoryIcon(group.category);
+            return (
+              <View key={group.category ?? gi} style={styles.group}>
+                <View style={styles.groupTitleRow}>
+                  <GroupIcon size={13} color="#888" strokeWidth={2.4} />
+                  <Text style={styles.groupTitle}>{group.category}</Text>
+                </View>
+                {group.contacts?.map((c, ci) => (
+                  <TouchableOpacity
+                    key={c.id ?? ci}
+                    style={styles.contactRow}
+                    activeOpacity={0.7}
+                    onPress={() => call(c.number)}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.contactName}>{c.name}</Text>
+                      {c.sub ? <Text style={styles.contactSub}>{c.sub}</Text> : null}
+                      <Text style={styles.contactNumber}>{c.number}</Text>
+                    </View>
+                    <View style={styles.callBtn}>
+                      <Phone size={12} color="#fff" strokeWidth={2.4} />
+                      <Text style={styles.callBtnText}>Call</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            );
+          })}
           <View style={{ height: 32 }} />
         </ScrollView>
       )}
@@ -203,12 +234,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   backBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.15)",
+    width: 34, height: 34,
     alignItems: "center", justifyContent: "center",
   },
-  backIcon: { color: "#fff", fontSize: 18, fontWeight: "bold" },
-  headerTitle: { color: "#fff", fontSize: 20, fontWeight: "700" },
+  headerTitleRow: { flexDirection: "row", alignItems: "center", gap: 9 },
+  headerIconBox: {
+    width: 26, height: 26, borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    alignItems: "center", justifyContent: "center",
+  },
+  headerTitle: { color: "#fff", fontSize: 18, fontWeight: "700" },
 
   centerBox: { flex: 1, alignItems: "center", justifyContent: "center" },
 
@@ -227,11 +262,18 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-  sosBtnIcon: { fontSize: 30 },
+  sosBtnIconBox: {
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    alignItems: "center", justifyContent: "center",
+  },
   sosBtnTitle: { color: "#fff", fontSize: 16, fontWeight: "800" },
   sosBtnSub: { color: "rgba(255,255,255,0.85)", fontSize: 12, marginTop: 2 },
 
   notice: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
     backgroundColor: "#fffbec",
     borderWidth: 1,
     borderColor: "#f0d070",
@@ -239,15 +281,15 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 16,
   },
-  noticeText: { color: "#b07d00", fontSize: 12, lineHeight: 17 },
+  noticeText: { color: "#b07d00", fontSize: 12, lineHeight: 17, flex: 1 },
 
   group: { marginBottom: 20 },
+  groupTitleRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 },
   groupTitle: {
     fontSize: 13,
     fontWeight: "700",
     color: "#888",
     letterSpacing: 0.5,
-    marginBottom: 8,
     textTransform: "uppercase",
   },
   contactRow: {
@@ -268,6 +310,9 @@ const styles = StyleSheet.create({
   contactSub: { fontSize: 12, color: "#888", marginTop: 2 },
   contactNumber: { fontSize: 13, color: "#1a5c38", marginTop: 4, fontWeight: "600" },
   callBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
     backgroundColor: "#1a5c38",
     borderRadius: 20,
     paddingHorizontal: 14,

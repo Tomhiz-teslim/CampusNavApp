@@ -14,6 +14,15 @@ import {
 import { useRouter } from "expo-router";
 import { auth, database } from "../lib/firebase";
 import { ref, push, set } from "firebase/database";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronUp,
+  Mail,
+  MessageCircle,
+} from "lucide-react-native";
 
 // ── Contact channels ─────────────────────────────────────────────────────
 // Swap these for the real support inbox / WhatsApp line before release.
@@ -93,7 +102,7 @@ export default function HelpSupportScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backIcon}>←</Text>
+          <ChevronLeft size={20} color="#fff" strokeWidth={2.4} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Help & Support</Text>
         <View style={{ width: 36 }} />
@@ -103,11 +112,11 @@ export default function HelpSupportScreen() {
         {/* Quick contact */}
         <View style={styles.contactRow}>
           <TouchableOpacity style={styles.contactBtn} onPress={openEmail} activeOpacity={0.8}>
-            <Text style={styles.contactBtnIcon}>✉️</Text>
+            <Mail size={20} color="#fff" strokeWidth={2.2} />
             <Text style={styles.contactBtnText}>Email Us</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.contactBtn, styles.contactBtnWhatsapp]} onPress={openWhatsApp} activeOpacity={0.8}>
-            <Text style={styles.contactBtnIcon}>💬</Text>
+            <MessageCircle size={20} color="#fff" strokeWidth={2.2} />
             <Text style={styles.contactBtnText}>WhatsApp Us</Text>
           </TouchableOpacity>
         </View>
@@ -126,7 +135,11 @@ export default function HelpSupportScreen() {
               >
                 <View style={styles.faqQRow}>
                   <Text style={styles.faqQ}>{item.q}</Text>
-                  <Text style={styles.faqChevron}>{open ? "▲" : "▼"}</Text>
+                  {open ? (
+                    <ChevronUp size={14} color="#999" strokeWidth={2.4} />
+                  ) : (
+                    <ChevronDown size={14} color="#999" strokeWidth={2.4} />
+                  )}
                 </View>
                 {open && <Text style={styles.faqA}>{item.a}</Text>}
               </TouchableOpacity>
@@ -138,13 +151,15 @@ export default function HelpSupportScreen() {
         <Text style={styles.sectionTitle}>SEND US A MESSAGE</Text>
         <View style={styles.feedbackCard}>
           {sent && (
-            <View style={styles.successBox}>
-              <Text style={styles.successText}>✅ Message sent — we'll get back to you.</Text>
+            <View style={[styles.successBox, styles.msgBoxRow]}>
+              <CheckCircle2 size={15} color="#1a5c38" strokeWidth={2.2} />
+              <Text style={styles.successText}>Message sent — we'll get back to you.</Text>
             </View>
           )}
           {error ? (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorText}>⚠️ {error}</Text>
+            <View style={[styles.errorBox, styles.msgBoxRow]}>
+              <AlertTriangle size={15} color="#cc0000" strokeWidth={2.2} />
+              <Text style={styles.errorText}>{error}</Text>
             </View>
           ) : null}
           <TextInput
@@ -199,7 +214,6 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   contactBtnWhatsapp: { backgroundColor: "#25D366" },
-  contactBtnIcon: { fontSize: 22 },
   contactBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
 
   sectionTitle: {
@@ -221,7 +235,6 @@ const styles = StyleSheet.create({
   },
   faqQRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   faqQ: { flex: 1, fontSize: 14, fontWeight: "600", color: "#222", marginRight: 10 },
-  faqChevron: { fontSize: 11, color: "#999" },
   faqA: { fontSize: 13, color: "#666", lineHeight: 19, marginTop: 10 },
 
   feedbackCard: {
@@ -231,10 +244,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#f0f0f0",
   },
+  msgBoxRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   successBox: { backgroundColor: "#f0fff4", borderWidth: 1, borderColor: "#99eebb", borderRadius: 8, padding: 12, marginBottom: 14 },
-  successText: { color: "#1a5c38", fontSize: 13, textAlign: "center" },
+  successText: { color: "#1a5c38", fontSize: 13, flex: 1 },
   errorBox: { backgroundColor: "#fff0f0", borderWidth: 1, borderColor: "#ffcccc", borderRadius: 8, padding: 12, marginBottom: 14 },
-  errorText: { color: "#cc0000", fontSize: 13, textAlign: "center" },
+  errorText: { color: "#cc0000", fontSize: 13, flex: 1 },
   feedbackInput: {
     borderWidth: 1.5,
     borderColor: "#e0e0e0",

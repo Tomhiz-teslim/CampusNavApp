@@ -5,6 +5,18 @@ import {
 } from "react-native";
 import * as Location from "expo-location";
 import { router } from "expo-router";
+import { ComponentType } from "react";
+import {
+  AlertTriangle,
+  Bus,
+  ChevronRight,
+  Clock,
+  MapPin,
+  Navigation,
+  Target,
+  Timer,
+  X,
+} from "lucide-react-native";
 
 // ─── Shuttle Routes Data ──────────────────────────────────────────
 const SHUTTLE_ROUTES = [
@@ -20,6 +32,7 @@ const SHUTTLE_ROUTES = [
     ],
     color: "#1a5c38",
     emoji: "🚌",
+    Icon: Bus,
     operatingHours: "6:00 AM - 8:00 PM",
     frequency: "Every 2-3 mins",
   },
@@ -34,6 +47,7 @@ const SHUTTLE_ROUTES = [
     ],
     color: "#1e6fad",
     emoji: "🚐",
+    Icon: Bus,
     operatingHours: "6:30 AM - 7:30 PM",
     frequency: "Every 2-3 mins",
   },
@@ -49,6 +63,7 @@ const SHUTTLE_ROUTES = [
     ],
     color: "#d97706",
     emoji: "🚌",
+    Icon: Bus,
     operatingHours: "6:00 AM - 8:00 PM",
     frequency: "Every 2-3 mins",
   },
@@ -64,6 +79,7 @@ const SHUTTLE_ROUTES = [
     ],
     color: "#9333ea",
     emoji: "🚐",
+    Icon: Bus,
     operatingHours: "6:30 AM - 7:30 PM",
     frequency: "Every 2-3 mins",
   },
@@ -105,7 +121,9 @@ function RouteCard({ route, distance, onPress }: RouteCardProps) {
     >
       <View style={styles.routeCardHeader}>
         <View style={styles.routeCardTitleRow}>
-          <Text style={styles.routeEmoji}>{route.emoji}</Text>
+          <View style={[styles.routeIconBox, { backgroundColor: route.color + "15" }]}>
+            <route.Icon size={20} color={route.color} strokeWidth={2.2} />
+          </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.routeName}>{route.name}</Text>
             <Text style={styles.routeDesc}>{route.description}</Text>
@@ -113,8 +131,9 @@ function RouteCard({ route, distance, onPress }: RouteCardProps) {
         </View>
         {distance !== undefined && (
           <View style={[styles.distanceBadge, { backgroundColor: route.color + "15" }]}>
+            <MapPin size={11} color={route.color} strokeWidth={2.4} />
             <Text style={[styles.distanceText, { color: route.color }]}>
-              📍 {distance < 0.1 ? "< 0.1" : distance.toFixed(2)} km
+              {distance < 0.1 ? "< 0.1" : distance.toFixed(2)} km
             </Text>
           </View>
         )}
@@ -122,11 +141,17 @@ function RouteCard({ route, distance, onPress }: RouteCardProps) {
 
       <View style={styles.routeCardDetails}>
         <View style={styles.detailItem}>
-          <Text style={styles.detailLabel}>⏰ Hours</Text>
+          <View style={styles.detailLabelRow}>
+            <Clock size={11} color="#999" strokeWidth={2.2} />
+            <Text style={styles.detailLabel}>Hours</Text>
+          </View>
           <Text style={styles.detailValue}>{route.operatingHours}</Text>
         </View>
         <View style={styles.detailItem}>
-          <Text style={styles.detailLabel}>⏱️ Frequency</Text>
+          <View style={styles.detailLabelRow}>
+            <Timer size={11} color="#999" strokeWidth={2.2} />
+            <Text style={styles.detailLabel}>Frequency</Text>
+          </View>
           <Text style={styles.detailValue}>{route.frequency}</Text>
         </View>
       </View>
@@ -144,8 +169,9 @@ function RouteCard({ route, distance, onPress }: RouteCardProps) {
 
       <View style={styles.routeCardFooter}>
         <Text style={[styles.viewDetailsBtn, { color: route.color }]}>
-          View Details →
+          View Details
         </Text>
+        <ChevronRight size={14} color={route.color} strokeWidth={2.4} />
       </View>
     </TouchableOpacity>
   );
@@ -196,7 +222,7 @@ function RouteDetailModal({ route, userLocation, onClose }: RouteDetailProps) {
             style={styles.closeBtn}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Text style={styles.closeBtnText}>✕</Text>
+            <X size={18} color="#666" strokeWidth={2.4} />
           </TouchableOpacity>
           <Text style={styles.detailTitle}>{route.name}</Text>
           <View style={{ width: 30 }} />
@@ -238,14 +264,14 @@ function RouteDetailModal({ route, userLocation, onClose }: RouteDetailProps) {
           <Text style={styles.sectionTitle}>Schedule</Text>
           <View style={styles.infoBox}>
             <View style={styles.infoRow}>
-              <Text style={styles.infoIcon}>🕐</Text>
+              <Clock size={18} color={route.color} strokeWidth={2.2} />
               <View>
                 <Text style={styles.infoLabel}>Operating Hours</Text>
                 <Text style={styles.infoValue}>{route.operatingHours}</Text>
               </View>
             </View>
             <View style={[styles.infoRow, { marginTop: 12 }]}>
-              <Text style={styles.infoIcon}>⏱️</Text>
+              <Timer size={18} color={route.color} strokeWidth={2.2} />
               <View>
                 <Text style={styles.infoLabel}>Frequency</Text>
                 <Text style={styles.infoValue}>{route.frequency}</Text>
@@ -273,12 +299,18 @@ function RouteDetailModal({ route, userLocation, onClose }: RouteDetailProps) {
         {/* Distance Info */}
         {startDistance !== null && (
           <View style={[styles.detailSection, { backgroundColor: "#f0faf4" }]}>
-            <Text style={styles.sectionTitle}>📍 Distance to Start</Text>
-            <Text style={styles.distanceInfo}>
-              {startDistance < 0.1
-                ? "You are at or very near the starting point! 🎯"
-                : `${startDistance.toFixed(2)} km away`}
-            </Text>
+            <View style={styles.sectionTitleRow}>
+              <MapPin size={14} color="#1a5c38" strokeWidth={2.2} />
+              <Text style={styles.sectionTitle}>Distance to Start</Text>
+            </View>
+            <View style={styles.distanceInfoRow}>
+              {startDistance < 0.1 && <Target size={14} color="#1a5c38" strokeWidth={2.2} />}
+              <Text style={styles.distanceInfo}>
+                {startDistance < 0.1
+                  ? "You are at or very near the starting point!"
+                  : `${startDistance.toFixed(2)} km away`}
+              </Text>
+            </View>
           </View>
         )}
 
@@ -288,7 +320,8 @@ function RouteDetailModal({ route, userLocation, onClose }: RouteDetailProps) {
             style={[styles.actionBtn, { backgroundColor: route.color }]}
             onPress={handleGetDirections}
           >
-            <Text style={styles.actionBtnText}>🗺️ Get Directions</Text>
+            <Navigation size={15} color="#fff" strokeWidth={2.4} />
+            <Text style={styles.actionBtnText}>Get Directions</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionBtn, { backgroundColor: "#ddd" }]}
@@ -375,7 +408,12 @@ export default function ShuttleScreen() {
     <View style={styles.screen}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>🚌 Shuttle Routes</Text>
+        <View style={styles.headerTitleRow}>
+          <View style={styles.headerIconBox}>
+            <Bus size={16} color="#fff" strokeWidth={2.2} />
+          </View>
+          <Text style={styles.headerTitle}>Shuttle Routes</Text>
+        </View>
         <Text style={styles.headerSub}>Navigate campus with ease</Text>
       </View>
 
@@ -385,7 +423,8 @@ export default function ShuttleScreen() {
           style={styles.errorBanner}
           onPress={fetchLocation}
         >
-          <Text style={styles.errorText}>⚠️ {error} Tap to retry</Text>
+          <AlertTriangle size={14} color="#b07d00" strokeWidth={2.2} />
+          <Text style={styles.errorText}>{error} Tap to retry</Text>
         </TouchableOpacity>
       )}
 
@@ -400,14 +439,17 @@ export default function ShuttleScreen() {
           onPress={() => setSortBy("nearest")}
           disabled={!userLocation}
         >
-          <Text
-            style={[
-              styles.sortBtnText,
-              sortBy === "nearest" && styles.sortBtnTextActive,
-            ]}
-          >
-            📍 Nearest
-          </Text>
+          <View style={styles.sortBtnRow}>
+            <MapPin size={12} color={sortBy === "nearest" ? "#fff" : "#666"} strokeWidth={2.4} />
+            <Text
+              style={[
+                styles.sortBtnText,
+                sortBy === "nearest" && styles.sortBtnTextActive,
+              ]}
+            >
+              Nearest
+            </Text>
+          </View>
         </TouchableOpacity>
         <TouchableOpacity
           style={[
@@ -442,7 +484,9 @@ export default function ShuttleScreen() {
         >
           {sortedRoutes.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyIcon}>🚌</Text>
+              <View style={styles.emptyIconBox}>
+                <Bus size={30} color="#bbb" strokeWidth={1.8} />
+              </View>
               <Text style={styles.emptyText}>No shuttle routes available</Text>
             </View>
           ) : (
@@ -488,11 +532,24 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     paddingHorizontal: 16,
   },
+  headerTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 4,
+  },
+  headerIconBox: {
+    width: 30,
+    height: 30,
+    borderRadius: 9,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   headerTitle: {
     color: "#fff",
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "800",
-    marginBottom: 4,
   },
   headerSub: {
     color: "rgba(255,255,255,0.8)",
@@ -501,12 +558,14 @@ const styles = StyleSheet.create({
 
   // Error Banner
   errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
     backgroundColor: "#fffbec",
     borderBottomWidth: 1,
     borderColor: "#f0d070",
     paddingHorizontal: 16,
     paddingVertical: 12,
-    justifyContent: "center",
   },
   errorText: {
     color: "#b07d00",
@@ -539,6 +598,7 @@ const styles = StyleSheet.create({
   sortBtnActive: {
     backgroundColor: "#1a5c38",
   },
+  sortBtnRow: { flexDirection: "row", alignItems: "center", gap: 5 },
   sortBtnText: {
     fontSize: 12,
     fontWeight: "600",
@@ -590,8 +650,12 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     gap: 12,
   },
-  routeEmoji: {
-    fontSize: 28,
+  routeIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
   },
   routeName: {
     fontSize: 14,
@@ -605,6 +669,9 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   distanceBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 5,
@@ -629,11 +696,11 @@ const styles = StyleSheet.create({
   detailItem: {
     flex: 1,
   },
+  detailLabelRow: { flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 3 },
   detailLabel: {
     fontSize: 11,
     color: "#999",
     fontWeight: "600",
-    marginBottom: 3,
   },
   detailValue: {
     fontSize: 12,
@@ -672,8 +739,11 @@ const styles = StyleSheet.create({
 
   // Route Card Footer
   routeCardFooter: {
-    paddingTop: 10,
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    paddingTop: 10,
   },
   viewDetailsBtn: {
     fontSize: 12,
@@ -717,11 +787,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  closeBtnText: {
-    fontSize: 20,
-    color: "#666",
-    fontWeight: "600",
-  },
+
   detailTitle: {
     fontSize: 16,
     fontWeight: "700",
@@ -788,9 +854,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     gap: 12,
   },
-  infoIcon: {
-    fontSize: 18,
-  },
+
   infoLabel: {
     fontSize: 11,
     color: "#999",
@@ -829,6 +893,8 @@ const styles = StyleSheet.create({
   },
 
   // Distance Info
+  sectionTitleRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 12 },
+  distanceInfoRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   distanceInfo: {
     fontSize: 13,
     fontWeight: "600",
@@ -844,6 +910,8 @@ const styles = StyleSheet.create({
   },
   actionBtn: {
     flex: 1,
+    flexDirection: "row",
+    gap: 6,
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: "center",
@@ -860,8 +928,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 80,
   },
-  emptyIcon: {
-    fontSize: 56,
+  emptyIconBox: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#f0f0f0",
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: 16,
   },
   emptyText: {

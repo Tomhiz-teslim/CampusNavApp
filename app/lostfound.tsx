@@ -18,6 +18,28 @@ import {
 import { useRouter } from "expo-router";
 import { auth, database } from "../lib/firebase";
 import { StyledModal, useStyledModal } from "./StyledModal";
+import { ComponentType } from "react";
+import {
+  AlertTriangle,
+  Backpack,
+  Calendar,
+  Camera,
+  CheckCircle2,
+  ChevronLeft,
+  CreditCard,
+  KeyRound,
+  Laptop,
+  MapPin,
+  Package,
+  PackageSearch,
+  Phone,
+  PhoneOff,
+  Plus,
+  Search,
+  Smartphone,
+  Wallet,
+  X,
+} from "lucide-react-native";
 
 type LostFoundCategory =
   | "Phone"
@@ -38,14 +60,14 @@ const CATEGORIES: LostFoundCategory[] = [
   "Other",
 ];
 
-const CATEGORY_ICONS: Record<LostFoundCategory, string> = {
-  Phone: "📱",
-  "ID Card": "🪪",
-  Wallet: "👛",
-  Keys: "🔑",
-  Laptop: "💻",
-  Bag: "🎒",
-  Other: "📦",
+const CATEGORY_ICONS: Record<LostFoundCategory, ComponentType<any>> = {
+  Phone: Smartphone,
+  "ID Card": CreditCard,
+  Wallet: Wallet,
+  Keys: KeyRound,
+  Laptop: Laptop,
+  Bag: Backpack,
+  Other: Package,
 };
 
 const LF_CATEGORY_COLORS: Record<LostFoundCategory, { pin: string; dot: string }> = {
@@ -131,7 +153,7 @@ export default function LostFoundScreen() {
   function handleCall(phone: string) {
     const cleaned = phone.replace(/[^0-9+]/g, "");
     Linking.openURL(`tel:${cleaned}`).catch(() => {
-      showAlert("Couldn't place call", "Try dialing the number manually.", "📞");
+      showAlert("Couldn't place call", "Try dialing the number manually.", PhoneOff);
     });
   }
 
@@ -142,16 +164,21 @@ export default function LostFoundScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backIcon}>←</Text>
+          <ChevronLeft size={22} color="#fff" strokeWidth={2.4} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Lost & Found</Text>
-        <View style={{ width: 36 }} />
+        <View style={styles.headerTitleRow}>
+          <View style={styles.headerIconBox}>
+            <PackageSearch size={15} color="#fff" strokeWidth={2.2} />
+          </View>
+          <Text style={styles.headerTitle}>Lost & Found</Text>
+        </View>
+        <View style={{ width: 34 }} />
       </View>
 
       <View style={styles.body}>
         {/* Search bar */}
         <View style={styles.searchBar}>
-          <Text style={styles.searchIcon}>🔍</Text>
+          <Search size={16} color="#999" strokeWidth={2.2} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search by item, e.g. 'iPhone', 'Student ID'…"
@@ -162,7 +189,7 @@ export default function LostFoundScreen() {
           />
           {search.length > 0 && (
             <TouchableOpacity onPress={() => setSearch("")}>
-              <Text style={styles.clearText}>✕</Text>
+              <X size={15} color="#999" strokeWidth={2.4} />
             </TouchableOpacity>
           )}
         </View>
@@ -173,7 +200,7 @@ export default function LostFoundScreen() {
           onPress={() => setShowForm(true)}
           activeOpacity={0.85}
         >
-          <Text style={styles.reportBtnIcon}>➕</Text>
+          <Plus size={17} color="#fff" strokeWidth={2.6} />
           <Text style={styles.reportBtnText}>Report Found Item</Text>
         </TouchableOpacity>
 
@@ -191,7 +218,9 @@ export default function LostFoundScreen() {
             </View>
           ) : filteredItems.length === 0 ? (
             <View style={styles.centerBox}>
-              <Text style={styles.emptyEmoji}>🔎</Text>
+              <View style={styles.emptyIconBox}>
+                <Search size={26} color="#bbb" strokeWidth={1.8} />
+              </View>
               <Text style={styles.emptyTitle}>
                 {search ? "No matching items" : "No items reported yet"}
               </Text>
@@ -215,13 +244,13 @@ export default function LostFoundScreen() {
           onSubmitted={() => {
             setShowForm(false);
             showAlert(
-              "✅ Reported!",
+              "Reported!",
               "Thanks for helping reunite this item with its owner.",
-              "🙌",
+              CheckCircle2,
             );
           }}
           onError={() =>
-            showAlert("Something went wrong", "Please try again.", "⚠️")
+            showAlert("Something went wrong", "Please try again.", AlertTriangle)
           }
         />
       )}
@@ -249,9 +278,10 @@ function LostFoundCard({
           />
         ) : (
           <View style={[cardStyles.thumb, cardStyles.thumbPlaceholder]}>
-            <Text style={{ fontSize: 26 }}>
-              {CATEGORY_ICONS[item.category] || "📦"}
-            </Text>
+            {(() => {
+              const CatIcon = CATEGORY_ICONS[item.category] || Package;
+              return <CatIcon size={24} color="#999" strokeWidth={2} />;
+            })()}
           </View>
         )}
 
@@ -261,8 +291,12 @@ function LostFoundCard({
               {item.title}
             </Text>
             <View style={[cardStyles.pill, { backgroundColor: colors.dot }]}>
+              {(() => {
+                const CatIcon = CATEGORY_ICONS[item.category] || Package;
+                return <CatIcon size={11} color={colors.pin} strokeWidth={2.4} />;
+              })()}
               <Text style={[cardStyles.pillText, { color: colors.pin }]}>
-                {CATEGORY_ICONS[item.category]} {item.category}
+                {item.category}
               </Text>
             </View>
           </View>
@@ -274,9 +308,11 @@ function LostFoundCard({
           )}
 
           <View style={cardStyles.metaRow}>
-            <Text style={cardStyles.metaText}>📍 {item.location}</Text>
+            <MapPin size={11} color="#999" strokeWidth={2.2} />
+            <Text style={cardStyles.metaText}>{item.location}</Text>
             <Text style={cardStyles.metaDot}>·</Text>
-            <Text style={cardStyles.metaText}>🗓️ {item.dateFound}</Text>
+            <Calendar size={11} color="#999" strokeWidth={2.2} />
+            <Text style={cardStyles.metaText}>{item.dateFound}</Text>
           </View>
           <Text style={cardStyles.postedAgo}>{timeAgo(item.createdAt)}</Text>
         </View>
@@ -287,7 +323,8 @@ function LostFoundCard({
         onPress={() => onCall(item.phone)}
         activeOpacity={0.85}
       >
-        <Text style={cardStyles.callBtnText}>📞 Call Finder · {item.phone}</Text>
+        <Phone size={13} color="#1A73E8" strokeWidth={2.4} />
+        <Text style={cardStyles.callBtnText}>Call Finder · {item.phone}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -375,7 +412,7 @@ function ReportFoundItemModal({
             <View style={formStyles.headerRow}>
               <Text style={formStyles.header}>Report Found Item</Text>
               <TouchableOpacity onPress={onClose}>
-                <Text style={formStyles.closeX}>✕</Text>
+                <X size={18} color="#999" strokeWidth={2.4} />
               </TouchableOpacity>
             </View>
 
@@ -402,6 +439,7 @@ function ReportFoundItemModal({
                 {CATEGORIES.map((cat) => {
                   const active = category === cat;
                   const colors = LF_CATEGORY_COLORS[cat];
+                  const CatIcon = CATEGORY_ICONS[cat];
                   return (
                     <TouchableOpacity
                       key={cat}
@@ -414,9 +452,7 @@ function ReportFoundItemModal({
                       ]}
                       onPress={() => setCategory(cat)}
                     >
-                      <Text style={formStyles.chipIcon}>
-                        {CATEGORY_ICONS[cat]}
-                      </Text>
+                      <CatIcon size={13} color={active ? "#fff" : "#555"} strokeWidth={2.3} />
                       <Text
                         style={[
                           formStyles.chipText,
@@ -474,7 +510,7 @@ function ReportFoundItemModal({
                   />
                 ) : (
                   <>
-                    <Text style={{ fontSize: 22 }}>📷</Text>
+                    <Camera size={22} color="#999" strokeWidth={1.8} />
                     <Text style={formStyles.photoPickerText}>Add a photo</Text>
                   </>
                 )}
@@ -531,12 +567,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   backBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.15)",
+    width: 34, height: 34,
     alignItems: "center", justifyContent: "center",
   },
-  backIcon: { color: "#fff", fontSize: 18, fontWeight: "bold" },
-  headerTitle: { color: "#fff", fontSize: 20, fontWeight: "700" },
+  headerTitleRow: { flexDirection: "row", alignItems: "center", gap: 9 },
+  headerIconBox: {
+    width: 26, height: 26, borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    alignItems: "center", justifyContent: "center",
+  },
+  headerTitle: { color: "#fff", fontSize: 18, fontWeight: "700" },
   body: { flex: 1, padding: 16 },
   searchBar: {
     flexDirection: "row",
@@ -548,9 +588,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#eee",
   },
-  searchIcon: { fontSize: 16, marginRight: 8 },
-  searchInput: { flex: 1, fontSize: 15, color: "#333" },
-  clearText: { fontSize: 14, color: "#999", paddingHorizontal: 4 },
+  searchInput: { flex: 1, fontSize: 15, color: "#333", marginLeft: 8 },
   reportBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -565,12 +603,16 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-  reportBtnIcon: { fontSize: 16, color: "#fff" },
   reportBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
   listContent: { paddingBottom: 32 },
   centerBox: { alignItems: "center", justifyContent: "center", paddingVertical: 60, paddingHorizontal: 20 },
   loadingText: { marginTop: 12, color: "#888", fontSize: 15 },
-  emptyEmoji: { fontSize: 40, marginBottom: 12 },
+  emptyIconBox: {
+    width: 56, height: 56, borderRadius: 28,
+    backgroundColor: "#f0f0f0",
+    alignItems: "center", justifyContent: "center",
+    marginBottom: 14,
+  },
   emptyTitle: { fontSize: 17, fontWeight: "700", color: "#333", marginBottom: 6 },
   emptySubtitle: { fontSize: 14, color: "#888", textAlign: "center", lineHeight: 20 },
 });
@@ -607,18 +649,21 @@ const cardStyles = StyleSheet.create({
     gap: 6,
   },
   title: { fontSize: 15, fontWeight: "700", color: "#222", flexShrink: 1 },
-  pill: { borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
+  pill: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3,
+  },
   pillText: { fontSize: 11, fontWeight: "700" },
   desc: { fontSize: 13, color: "#777", marginTop: 4, lineHeight: 18 },
-  metaRow: { flexDirection: "row", alignItems: "center", marginTop: 6, flexWrap: "wrap" },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6, flexWrap: "wrap" },
   metaText: { fontSize: 12, color: "#999" },
-  metaDot: { fontSize: 12, color: "#ccc", marginHorizontal: 6 },
+  metaDot: { fontSize: 12, color: "#ccc", marginHorizontal: 4 },
   postedAgo: { fontSize: 11, color: "#bbb", marginTop: 3 },
   callBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
     backgroundColor: "#e8f0fe",
     borderRadius: 10,
     paddingVertical: 11,
-    alignItems: "center",
     marginTop: 12,
   },
   callBtnText: { color: "#1A73E8", fontSize: 14, fontWeight: "700" },
@@ -685,7 +730,6 @@ const formStyles = StyleSheet.create({
     marginRight: 8,
     gap: 5,
   },
-  chipIcon: { fontSize: 13 },
   chipText: { fontSize: 12, color: "#555", fontWeight: "600" },
   chipTextActive: { color: "#fff" },
   photoPicker: {

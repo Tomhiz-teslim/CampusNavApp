@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { ComponentType, useEffect, useState } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet,
   TextInput, ScrollView, ActivityIndicator,
@@ -8,24 +8,50 @@ import { auth, database } from "../lib/firebase";
 import { ref, onValue, push, set } from "firebase/database";
 import { router } from "expo-router";
 import { StyledModal, useStyledModal } from "./StyledModal";
+import {
+  AlertTriangle,
+  BookOpen,
+  Building2,
+  CheckCircle2,
+  ChevronLeft,
+  Clock,
+  GraduationCap,
+  Home,
+  Landmark,
+  MapPin,
+  Pencil,
+  Satellite,
+  Stethoscope,
+  Trophy,
+  Utensils,
+  X,
+  XCircle,
+} from "lucide-react-native";
 
-const SUBMIT_CATEGORIES = [
-  { key: "classroom", label: "Classroom", icon: "🏫" },
-  { key: "faculty",   label: "Faculty",   icon: "🎓" },
-  { key: "hostel",    label: "Hostel",    icon: "🏠" },
-  { key: "admin",     label: "Admin",     icon: "🏛️" },
-  { key: "food",      label: "Food Spot", icon: "🍽️" },
-  { key: "library",   label: "Library",   icon: "📚" },
-  { key: "medical",   label: "Medical",   icon: "🏥" },
-  { key: "sport",     label: "Sport",     icon: "⚽" },
-  { key: "other",     label: "Other",     icon: "📍" },
+const SUBMIT_CATEGORIES: {
+  key: string;
+  label: string;
+  Icon: ComponentType<any>;
+}[] = [
+  { key: "classroom", label: "Classroom", Icon: Building2 },
+  { key: "faculty",   label: "Faculty",   Icon: GraduationCap },
+  { key: "hostel",    label: "Hostel",    Icon: Home },
+  { key: "admin",     label: "Admin",     Icon: Landmark },
+  { key: "food",      label: "Food Spot", Icon: Utensils },
+  { key: "library",   label: "Library",   Icon: BookOpen },
+  { key: "medical",   label: "Medical",   Icon: Stethoscope },
+  { key: "sport",     label: "Sport",     Icon: Trophy },
+  { key: "other",     label: "Other",     Icon: MapPin },
 ];
 
-const STATUS_META: Record<string, { label: string; color: string; bg: string; icon: string }> = {
-  pending:  { label: "Under Review", color: "#b45309", bg: "#fef3c7", icon: "⏳" },
-  approved: { label: "Approved ✓",   color: "#166534", bg: "#dcfce7", icon: "✅" },
-  declined: { label: "Declined",     color: "#991b1b", bg: "#fee2e2", icon: "❌" },
-  rejected: { label: "Declined",     color: "#991b1b", bg: "#fee2e2", icon: "❌" }, // ← add this
+const STATUS_META: Record<
+  string,
+  { label: string; color: string; bg: string; Icon: ComponentType<any> }
+> = {
+  pending:  { label: "Under Review", color: "#b45309", bg: "#fef3c7", Icon: Clock },
+  approved: { label: "Approved",     color: "#166534", bg: "#dcfce7", Icon: CheckCircle2 },
+  declined: { label: "Declined",     color: "#991b1b", bg: "#fee2e2", Icon: XCircle },
+  rejected: { label: "Declined",     color: "#991b1b", bg: "#fee2e2", Icon: XCircle },
 };
 
 export default function SubmitLocationScreen() {
@@ -105,7 +131,7 @@ export default function SubmitLocationScreen() {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
-        showAlert("Permission denied", "Enable location access in your device settings.", "📍");
+        showAlert("Permission denied", "Enable location access in your device settings.", MapPin);
         setGpsLoading(false);
         return;
       }
@@ -114,18 +140,18 @@ export default function SubmitLocationScreen() {
       });
       setLocCoords({ lat: loc.coords.latitude, lng: loc.coords.longitude });
     } catch {
-      showAlert("Error", "Could not get your location. Try again.", "⚠️");
+      showAlert("Error", "Could not get your location. Try again.", AlertTriangle);
     }
     setGpsLoading(false);
   }
 
   async function handleSubmit() {
     if (!locName.trim()) {
-      showAlert("Missing name", "Please enter a location name.", "✏️");
+      showAlert("Missing name", "Please enter a location name.", Pencil);
       return;
     }
     if (!locCoords) {
-      showAlert("No coordinates", "Tap 'Use My Current Location' first.", "📍");
+      showAlert("No coordinates", "Tap 'Use My Current Location' first.", MapPin);
       return;
     }
 
@@ -148,12 +174,12 @@ export default function SubmitLocationScreen() {
       setLocCoords(null);
       setLocCategory("classroom");
       showAlert(
-        "Submitted! 🎉",
+        "Submitted!",
         "Your location has been sent for review. It will appear on the map once an admin approves it.",
-        "📬"
+        CheckCircle2
       );
     } catch {
-      showAlert("Error", "Submission failed. Please try again.", "⚠️");
+      showAlert("Error", "Submission failed. Please try again.", AlertTriangle);
     }
     setSubmitting(false);
   }
@@ -165,10 +191,10 @@ export default function SubmitLocationScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backText}>← Back</Text>
+          <ChevronLeft size={22} color="#fff" strokeWidth={2.4} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Submit a Location</Text>
-        <View style={{ width: 60 }} />
+        <View style={{ width: 34 }} />
       </View>
 
       <ScrollView
@@ -218,7 +244,7 @@ export default function SubmitLocationScreen() {
                 style={[styles.catChip, active && styles.catChipActive]}
                 onPress={() => setLocCategory(c.key)}
               >
-                <Text style={styles.catChipIcon}>{c.icon}</Text>
+                <c.Icon size={14} color={active ? "#fff" : "#555"} strokeWidth={2.3} />
                 <Text style={[styles.catChipText, active && styles.catChipTextActive]}>
                   {c.label}
                 </Text>
@@ -232,12 +258,14 @@ export default function SubmitLocationScreen() {
         <TouchableOpacity style={styles.gpsBtn} onPress={handleGetGPS} disabled={gpsLoading}>
           {gpsLoading ? (
             <ActivityIndicator color="#1a5c38" size="small" />
+          ) : locCoords ? (
+            <CheckCircle2 size={20} color="#1a5c38" strokeWidth={2.2} />
           ) : (
-            <Text style={styles.gpsBtnIcon}>📡</Text>
+            <Satellite size={20} color="#1a5c38" strokeWidth={2.2} />
           )}
           <View style={{ flex: 1 }}>
             <Text style={styles.gpsBtnTitle}>
-              {locCoords ? "Location captured ✓" : "Use My Current Location"}
+              {locCoords ? "Location captured" : "Use My Current Location"}
             </Text>
             {locCoords && (
               <Text style={styles.gpsBtnCoords}>
@@ -247,14 +275,17 @@ export default function SubmitLocationScreen() {
           </View>
           {locCoords && (
             <TouchableOpacity onPress={() => setLocCoords(null)}>
-              <Text style={styles.gpsClear}>✕</Text>
+              <X size={16} color="#999" strokeWidth={2.4} />
             </TouchableOpacity>
           )}
         </TouchableOpacity>
         {locCoords && (
-          <Text style={styles.gpsNote}>
-            📌 Make sure you're physically at the spot for best accuracy.
-          </Text>
+          <View style={styles.gpsNoteRow}>
+            <MapPin size={12} color="#888" strokeWidth={2.2} />
+            <Text style={styles.gpsNote}>
+              Make sure you're physically at the spot for best accuracy.
+            </Text>
+          </View>
         )}
 
         {/* Submit */}
@@ -273,18 +304,21 @@ export default function SubmitLocationScreen() {
             {mySubmissions.map((sub) => {
               const meta = STATUS_META[sub.status] || STATUS_META.pending;
               const cat  = SUBMIT_CATEGORIES.find((c) => c.key === sub.category);
+              const CatIcon = cat?.Icon || MapPin;
               return (
                 <View key={sub.id} style={styles.subCard}>
-                  <Text style={styles.subIcon}>{cat?.icon || "📍"}</Text>
+                  <View style={styles.subIconBox}>
+                    <CatIcon size={18} color="#1a5c38" strokeWidth={2.2} />
+                  </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.subName}>{sub.name}</Text>
                     <Text style={styles.subCat}>{cat?.label || sub.category}</Text>
                     {sub.status === "approved" && (
-                      <Text style={styles.subOnMap}>Visible on the map 🗺️</Text>
+                      <Text style={styles.subOnMap}>Visible on the map</Text>
                     )}
                   </View>
                   <View style={[styles.statusPill, { backgroundColor: meta.bg }]}>
-                    <Text style={styles.statusIcon}>{meta.icon}</Text>
+                    <meta.Icon size={11} color={meta.color} strokeWidth={2.4} />
                     <Text style={[styles.statusText, { color: meta.color }]}>{meta.label}</Text>
                   </View>
                 </View>
@@ -302,8 +336,7 @@ export default function SubmitLocationScreen() {
 const styles = StyleSheet.create({
   container:         { flex: 1, backgroundColor: "#f5f5f5" },
   header:            { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: 55, paddingHorizontal: 16, paddingBottom: 12, backgroundColor: "#1a5c38" },
-  backBtn:           { width: 60 },
-  backText:          { color: "#fff", fontSize: 14, fontWeight: "600" },
+  backBtn:           { width: 34 },
   headerTitle:       { color: "#fff", fontSize: 18, fontWeight: "bold" },
   content:           { padding: 16 },
   subtitle:          { fontSize: 13, color: "#888", lineHeight: 19, marginBottom: 20, backgroundColor: "#fff", borderRadius: 12, padding: 12, borderLeftWidth: 3, borderLeftColor: "#1a5c38" },
@@ -313,25 +346,22 @@ const styles = StyleSheet.create({
   catRow:            { marginBottom: 4 },
   catChip:           { flexDirection: "row", alignItems: "center", gap: 5, borderRadius: 20, borderWidth: 1.5, borderColor: "#ddd", backgroundColor: "#fff", paddingHorizontal: 13, paddingVertical: 8, marginRight: 8 },
   catChipActive:     { backgroundColor: "#1a5c38", borderColor: "#1a5c38" },
-  catChipIcon:       { fontSize: 14 },
   catChipText:       { fontSize: 12, fontWeight: "600", color: "#555" },
   catChipTextActive: { color: "#fff" },
   gpsBtn:            { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "#f0f7f3", borderRadius: 12, padding: 14, borderWidth: 1.5, borderColor: "#c8e6d4" },
-  gpsBtnIcon:        { fontSize: 22 },
   gpsBtnTitle:       { fontSize: 14, fontWeight: "600", color: "#1a5c38" },
   gpsBtnCoords:      { fontSize: 11, color: "#4a8c63", marginTop: 2 },
-  gpsClear:          { fontSize: 16, color: "#999", paddingHorizontal: 4 },
-  gpsNote:           { fontSize: 12, color: "#888", marginTop: 7, lineHeight: 17 },
+  gpsNoteRow:        { flexDirection: "row", alignItems: "flex-start", gap: 5, marginTop: 7 },
+  gpsNote:           { fontSize: 12, color: "#888", lineHeight: 17, flex: 1 },
   submitBtn:         { backgroundColor: "#1a5c38", borderRadius: 12, padding: 16, alignItems: "center", marginTop: 22, shadowColor: "#1a5c38", shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
   submitBtnText:     { color: "#fff", fontSize: 15, fontWeight: "700" },
   historySection:    { marginTop: 28 },
   historyTitle:      { fontSize: 13, fontWeight: "700", color: "#888", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 12 },
   subCard:           { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "#fff", borderRadius: 12, padding: 13, marginBottom: 10, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 6, elevation: 1 },
-  subIcon:           { fontSize: 22 },
+  subIconBox:        { width: 38, height: 38, borderRadius: 10, backgroundColor: "#f0faf4", justifyContent: "center", alignItems: "center" },
   subName:           { fontSize: 14, fontWeight: "600", color: "#333" },
   subCat:            { fontSize: 12, color: "#888", marginTop: 2 },
   subOnMap:          { fontSize: 11, color: "#166534", marginTop: 3, fontWeight: "600" },
   statusPill:        { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 5 },
-  statusIcon:        { fontSize: 11 },
   statusText:        { fontSize: 12, fontWeight: "700" },
 });

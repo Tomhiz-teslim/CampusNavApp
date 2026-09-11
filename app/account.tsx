@@ -13,6 +13,7 @@ import {
 import {
   AlertTriangle,
   Bus,
+  Check,
   Calendar,
   CheckCircle2,
   ChevronRight,
@@ -651,7 +652,7 @@ function ErrorBanner({ message }: { message: string }) {
   if (!message) return null;
   return (
     <View style={styles.errorBanner}>
-      <Text style={styles.errorBannerIcon}>⚠️</Text>
+      <AlertTriangle size={16} color="#c0392b" strokeWidth={2.2} style={{ marginRight: 8, marginTop: 1 }} />
       <Text style={styles.errorBannerText}>{message}</Text>
     </View>
   );
@@ -1373,7 +1374,8 @@ function AdminPanel() {
       {activeTab === "events" && (
         <View style={{ flex: 1 }}>
           <TouchableOpacity style={styles.addBtn} onPress={openAddEvent}>
-            <Text style={styles.addBtnText}>＋ Add New Event</Text>
+            <Plus size={16} color="#fff" strokeWidth={2.6} />
+            <Text style={styles.addBtnText}>Add New Event</Text>
           </TouchableOpacity>
           <ScrollView contentContainerStyle={styles.listContent}>
             {events.length === 0 ? (
@@ -1807,7 +1809,7 @@ function AdminPanel() {
                             </Text>
                           </View>
                           {eventForm.location === loc.name && (
-                            <Text style={styles.searchResultCheck}>✓</Text>
+                            <Check size={18} color="#1a5c38" strokeWidth={2.6} />
                           )}
                         </TouchableOpacity>
                       ))}
@@ -2648,7 +2650,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
   },
-  errorBannerIcon: { fontSize: 16, marginRight: 8, marginTop: 1 },
   errorBannerText: {
     color: "#c0392b",
     fontSize: 13,
@@ -2826,7 +2827,6 @@ const styles = StyleSheet.create({
 
   listContent: { padding: 16, gap: 12 },
   emptyState: { alignItems: "center", paddingTop: 60, gap: 12 },
-  emptyIcon: { fontSize: 48, marginBottom: 12 },
   emptyText: { color: "#999", fontSize: 15 },
   sectionCount: { padding: 14, color: "#666", fontSize: 13 },
   addBtn: {
@@ -3073,7 +3073,6 @@ const styles = StyleSheet.create({
   searchResultInner: { flex: 1 },
   searchResultName: { fontSize: 14, fontWeight: "600", color: "#222" },
   searchResultMeta: { fontSize: 12, color: "#888", marginTop: 2 },
-  searchResultCheck: { color: "#1a5c38", fontSize: 18, fontWeight: "bold" },
   noResultsBox: {
     backgroundColor: "#fffbec",
     borderRadius: 8,
@@ -3165,11 +3164,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginRight: 14,
   },
-  featureIcon: { fontSize: 20 },
   featureLabelWrap: { flex: 1 },
   featureLabel: { fontSize: 15, color: "#222", fontWeight: "600" },
   featureSub: { fontSize: 12, color: "#aaa", marginTop: 2 },
-  featureArrow: { fontSize: 20, color: "#ccc", marginLeft: 8 },
 
   servicesModalHeader: {
     flexDirection: "row",
