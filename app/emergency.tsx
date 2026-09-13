@@ -174,17 +174,6 @@ export default function EmergencyScreen() {
             </TouchableOpacity>
           )}
 
-          {usingDefaults && (
-            <View style={styles.notice}>
-              <AlertTriangle size={14} color="#b07d00" strokeWidth={2.2} />
-              <Text style={styles.noticeText}>
-                {loadError
-                  ? "Couldn't reach the server — showing placeholder numbers. Check your connection and reopen this screen to retry."
-                  : "These are placeholder numbers. An admin needs to add real contacts to the `emergencyContacts` node in Firebase."}
-              </Text>
-            </View>
-          )}
-
           {groups.map((group, gi) => {
             const GroupIcon = getCategoryIcon(group.category);
             return (

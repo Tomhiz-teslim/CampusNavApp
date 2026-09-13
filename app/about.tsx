@@ -12,6 +12,7 @@ import {
 import { useRouter } from "expo-router";
 import { ComponentType } from "react";
 import {
+  AtSign,
   Bus,
   Calendar,
   ChevronLeft,
@@ -21,9 +22,7 @@ import {
   Flag,
   Footprints,
   GraduationCap,
-  Instagram,
   Link2,
-  Linkedin,
   Map,
   MapPin,
   Mail,
@@ -59,8 +58,8 @@ const WHY_US: { icon: ComponentType<any>; text: string }[] = [
 
 const CONTACT: { icon: ComponentType<any>; label: string; value: string; url: string }[] = [
   { icon: Mail, label: "Email", value: "support@campusnav.app", url: "mailto: tomhizb12@gmail.com" },
-  { icon: Instagram, label: "Instagram", value: "@campusnav", url: "https://instagram.com/campusnav" },
-  { icon: Linkedin, label: "LinkedIn", value: "Even Tech", url: "https://linkedin.com/company/eventech" },
+  { icon: AtSign, label: "Instagram", value: "@campusnav", url: "https://instagram.com/campusnav" },
+  { icon: Link2, label: "LinkedIn", value: "Even Tech", url: "https://linkedin.com/company/eventech" },
 ];
 
 export default function AboutScreen() {

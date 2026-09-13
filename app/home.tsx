@@ -28,6 +28,7 @@ import {
   Play,
   Route,
   Search,
+  ShoppingBag,
   User,
   UserPlus,
   Users,
@@ -96,8 +97,18 @@ const CATEGORIES = [
 ];
 
 const MONTH_ABBR = [
-  "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
-  "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
+  "JAN",
+  "FEB",
+  "MAR",
+  "APR",
+  "MAY",
+  "JUN",
+  "JUL",
+  "AUG",
+  "SEP",
+  "OCT",
+  "NOV",
+  "DEC",
 ];
 function getEventDateBadge(
   dateStr?: string,
@@ -2117,28 +2128,28 @@ export default function HomeScreen() {
           <Text style={styles.sectionLabelText}>Add Friend</Text>
         </View>
         <View style={styles.addFriendCard}>
-        <View style={styles.addFriendRow}>
-          <TextInput
-            style={styles.addFriendInput}
-            placeholder="Type a name or username…"
-            placeholderTextColor="#999"
-            value={friendUsername}
-            onChangeText={handleUsernameChange}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          {friendUsername.length > 0 && (
-            <TouchableOpacity
-              style={styles.clearSearchBtn}
-              onPress={() => {
-                setFriendUsername("");
-                setUserSuggestions([]);
-              }}
-            >
-              <X size={14} color="#999" strokeWidth={2.4} />
-            </TouchableOpacity>
-          )}
-        </View>
+          <View style={styles.addFriendRow}>
+            <TextInput
+              style={styles.addFriendInput}
+              placeholder="Type a name or username…"
+              placeholderTextColor="#999"
+              value={friendUsername}
+              onChangeText={handleUsernameChange}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            {friendUsername.length > 0 && (
+              <TouchableOpacity
+                style={styles.clearSearchBtn}
+                onPress={() => {
+                  setFriendUsername("");
+                  setUserSuggestions([]);
+                }}
+              >
+                <X size={14} color="#999" strokeWidth={2.4} />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
         {userSuggestions.length > 0 && (
           <View style={styles.suggestionsBox}>
@@ -2687,9 +2698,7 @@ export default function HomeScreen() {
               {events.length > 0 && (
                 <View style={styles.previewSection}>
                   <View style={styles.previewHeaderRow}>
-                    <Text style={styles.previewHeaderText}>
-                      Campus Events
-                    </Text>
+                    <Text style={styles.previewHeaderText}>Campus Events</Text>
                     <TouchableOpacity onPress={() => setActiveTab("events")}>
                       <Text style={styles.previewSeeAll}>See all ›</Text>
                     </TouchableOpacity>
@@ -2888,9 +2897,17 @@ export default function HomeScreen() {
                         </Text>
                       </View>
                       <View
-                        style={[styles.categoryPill, { backgroundColor: "#fef3c7" }]}
+                        style={[
+                          styles.categoryPill,
+                          { backgroundColor: "#fef3c7" },
+                        ]}
                       >
-                        <Text style={[styles.categoryPillText, { color: "#d97706" }]}>
+                        <Text
+                          style={[
+                            styles.categoryPillText,
+                            { color: "#d97706" },
+                          ]}
+                        >
                           event
                         </Text>
                       </View>
@@ -2976,23 +2993,40 @@ export default function HomeScreen() {
               ))}
               {visibleBuildings.length === 0 && matchingEvents.length === 0 && (
                 <View style={styles.noResultsBox}>
-                  <Text style={styles.emptyText}>No matches for "{search}"</Text>
-                  <Text style={styles.noResultsHint}>Try browsing a category instead:</Text>
+                  <Text style={styles.emptyText}>
+                    No matches for "{search}"
+                  </Text>
+                  <Text style={styles.noResultsHint}>
+                    Try browsing a category instead:
+                  </Text>
                   <View style={styles.noResultsChipRow}>
                     {CATEGORIES.filter((c) => c !== "all").map((cat) => {
-                      const colors = CATEGORY_COLORS[cat] || CATEGORY_COLORS.admin;
+                      const colors =
+                        CATEGORY_COLORS[cat] || CATEGORY_COLORS.admin;
                       const ChipIcon = CATEGORY_ICON[cat] || Building2;
                       return (
                         <TouchableOpacity
                           key={`noresult-${cat}`}
-                          style={[styles.noResultsChip, { borderColor: colors.pin }]}
+                          style={[
+                            styles.noResultsChip,
+                            { borderColor: colors.pin },
+                          ]}
                           onPress={() => {
                             setSearch("");
                             setFilterCat(cat);
                           }}
                         >
-                          <ChipIcon size={13} color={colors.pin} strokeWidth={2.2} />
-                          <Text style={[styles.noResultsChipText, { color: colors.pin }]}>
+                          <ChipIcon
+                            size={13}
+                            color={colors.pin}
+                            strokeWidth={2.2}
+                          />
+                          <Text
+                            style={[
+                              styles.noResultsChipText,
+                              { color: colors.pin },
+                            ]}
+                          >
                             {cat.charAt(0).toUpperCase() + cat.slice(1)}
                           </Text>
                         </TouchableOpacity>
@@ -3367,6 +3401,22 @@ export default function HomeScreen() {
               distanceMetres={distanceToDestination}
             />
           </View>
+        )}
+
+      {/* Campus Services FAB — only in the calm, default map state */}
+      {!navigating &&
+        !directions &&
+        !loadingDirs &&
+        activeTab === "home" &&
+        !searchFocused &&
+        search.length === 0 && (
+          <TouchableOpacity
+            style={styles.servicesFab}
+            onPress={() => router.push("./service")}
+            activeOpacity={0.85}
+          >
+            <ShoppingBag size={22} color="#fff" strokeWidth={2.2} />
+          </TouchableOpacity>
         )}
 
       {/* Re-centre button */}
@@ -3827,6 +3877,23 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   recentreBtnIcon: { fontSize: 26, color: "#1A73E8" },
+
+  servicesFab: {
+    position: "absolute",
+    bottom: Platform.OS === "ios" ? 300 : 280,
+    right: 16,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "#1a5c38",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 8,
+  },
 
   keyboardAvoid: { position: "absolute", bottom: 0, left: 0, right: 0 },
   bottomSheet: {

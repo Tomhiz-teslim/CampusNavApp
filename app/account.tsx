@@ -17,6 +17,7 @@ import {
   Calendar,
   CheckCircle2,
   ChevronRight,
+  ClipboardList,
   CreditCard,
   GraduationCap,
   Info,
@@ -52,7 +53,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import ServicesTab from "../components/services";
 import { auth, database } from "../lib/firebase";
 
 // ── Hardcoded campus buildings (same as map screen) ──────────────────────────
@@ -2205,7 +2205,7 @@ function UserAccount() {
     matricNo: "",
     phone: "",
   });
-  const [showServices, setShowServices] = useState(false);
+
   const [infoPanel, setInfoPanel] = useState<{
     title: string;
     Icon: ComponentType<any>;
@@ -2341,7 +2341,13 @@ function UserAccount() {
       Icon: ShoppingBag,
       label: "Campus Services",
       sub: "Directory of services around campus",
-      action: () => setShowServices(true),
+      route: "/service",
+    },
+    {
+      Icon: ClipboardList,
+      label: "Manage My Listing",
+      sub: "Edit or renew your business listing",
+      route: "/my-services",
     },
     {
       Icon: AlertTriangle,
@@ -2572,36 +2578,7 @@ function UserAccount() {
         <Text style={styles.signOutFullText}>Sign Out</Text>
       </TouchableOpacity>
 
-      {/* Campus Services — full component, moved here from Home */}
-      <Modal
-        visible={showServices}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setShowServices(false)}
-      >
-        <View style={{ flex: 1, backgroundColor: "#fff" }}>
-          <View style={styles.servicesModalHeader}>
-            <View style={styles.servicesModalHeaderLeft}>
-              <View style={styles.servicesModalIconBox}>
-                <ShoppingBag size={16} color="#fff" strokeWidth={2.2} />
-              </View>
-              <Text style={styles.servicesModalHeaderTitle}>
-                Campus Services
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => setShowServices(false)}
-              style={styles.servicesModalCloseBtn}
-            >
-              <X size={16} color="#fff" strokeWidth={2.4} />
-            </TouchableOpacity>
-          </View>
-          <ServicesTab
-            userId={user?.uid ?? ""}
-            userName={userData?.fullName ?? ""}
-          />
-        </View>
-      </Modal>
+
 
       {/* Simple info panel for the placeholder Features items */}
       <Modal
