@@ -1,3 +1,4 @@
+import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import { router } from "expo-router";
 import { signOut } from "firebase/auth";
@@ -13,6 +14,7 @@ import {
 import {
   AlertTriangle,
   Bus,
+  Camera,
   Check,
   Calendar,
   CheckCircle2,
@@ -43,6 +45,7 @@ import { ComponentType, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -2199,6 +2202,7 @@ function UserAccount() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [form, setForm] = useState({
     fullName: "",
     faculty: "",
@@ -2265,6 +2269,35 @@ function UserAccount() {
       Alert.alert("Error", e.message || "Failed to save. Try again.");
     }
     setSaving(false);
+  }
+
+  async function handlePickPhoto() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert(
+        "Permission needed",
+        "Please allow photo library access to set a profile picture.",
+      );
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.5,
+      base64: true,
+    });
+    if (result.canceled || !result.assets?.[0]?.base64) return;
+    setUploadingPhoto(true);
+    try {
+      await update(ref(database, `users/${user!.uid}`), {
+        photoBase64: result.assets[0].base64,
+        updatedAt: Date.now(),
+      });
+    } catch (e: any) {
+      Alert.alert("Error", e.message || "Failed to update photo. Try again.");
+    }
+    setUploadingPhoto(false);
   }
 
   function handleSignOut() {
@@ -2413,11 +2446,28 @@ function UserAccount() {
         </TouchableOpacity>
 
         {/* Avatar */}
-        <View style={styles.avatarRing}>
+        <TouchableOpacity
+          style={styles.avatarRing}
+          onPress={handlePickPhoto}
+          disabled={uploadingPhoto}
+          activeOpacity={0.8}
+        >
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initials}</Text>
+            {uploadingPhoto ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : userData?.photoBase64 ? (
+              <Image
+                source={{ uri: `data:image/jpeg;base64,${userData.photoBase64}` }}
+                style={styles.avatarImg}
+              />
+            ) : (
+              <Text style={styles.avatarText}>{initials}</Text>
+            )}
           </View>
-        </View>
+          <View style={styles.avatarCameraBadge}>
+            <Camera size={13} color="#1a5c38" strokeWidth={2.4} />
+          </View>
+        </TouchableOpacity>
 
         {/* Name — editable inline */}
         {editing ? (
@@ -2698,6 +2748,25 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 14,
+    position: "relative",
+  },
+  avatarImg: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+  },
+  avatarCameraBadge: {
+    position: "absolute",
+    bottom: -2,
+    right: -2,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#1a5c38",
   },
   nameEditInput: {
     color: "#fff",
