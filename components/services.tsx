@@ -70,7 +70,7 @@ export default function ServicesTab({ userId }: { userId: string }) {
       const now = Date.now();
       const publicList: ServiceListing[] = Object.entries(data)
         .map(([id, v]: any) => ({ id, ...v }))
-        .filter((s: ServiceListing) => s.userId !== userId && s.active && s.expiresAt > now)
+        .filter((s: ServiceListing) => s.active && s.expiresAt > now)
         .sort((a, b) => b.createdAt - a.createdAt);
 
       setServices(publicList);
