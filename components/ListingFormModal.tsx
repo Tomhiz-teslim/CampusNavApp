@@ -9,10 +9,20 @@ import { auth, database } from "../lib/firebase";
 import { AlertTriangle, CheckCircle2, Lightbulb, Satellite } from "lucide-react-native";
 import { CategoryChip } from "./CategoryChip";
 import { PhotoPicker } from "./ServicePhotos";
+import { ChipInput } from "./ChipInput";
+import {
+  HoursEditor, defaultDraft, draftFromHours, draftToHours, validateDraft,
+  type HoursDraft,
+} from "./HoursEditor";
 import {
   GREEN, GREEN_TINT, BG, SUBSCRIPTION_FEE, TRIAL_DURATION_MS,
   ServiceListing, SERVICE_CATEGORIES,
 } from "../lib/serviceShared";
+
+function parsePrice(v: string): number | null {
+  const n = parseInt(v.replace(/[^0-9]/g, ""), 10);
+  return Number.isFinite(n) ? n : null;
+}
 
 export function ListingFormModal({
   visible, existing, userName, onClose, onSaved,
@@ -33,6 +43,11 @@ export function ListingFormModal({
   const [error, setError] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
   const [photosBusy, setPhotosBusy] = useState(false);
+  const [priceMin, setPriceMin] = useState("");
+  const [priceMax, setPriceMax] = useState("");
+  const [servicesOffered, setServicesOffered] = useState<string[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
+  const [hoursDraft, setHoursDraft] = useState<HoursDraft | null>(null);
 
   useEffect(() => {
     if (existing) {
@@ -46,6 +61,11 @@ export function ListingFormModal({
         location: existing.location,
       });
       setPhotos(existing.photos ?? []);
+      setPriceMin(existing.priceMin != null ? String(existing.priceMin) : "");
+      setPriceMax(existing.priceMax != null ? String(existing.priceMax) : "");
+      setServicesOffered(existing.servicesOffered ?? []);
+      setTags(existing.tags ?? []);
+      setHoursDraft(draftFromHours(existing.hours));
       setCoords(
         existing.latitude != null && existing.longitude != null
           ? { lat: existing.latitude, lng: existing.longitude }
@@ -55,6 +75,11 @@ export function ListingFormModal({
       setForm({ name: "", category: "food", description: "", phone: "", whatsapp: "", instagram: "", location: "" });
       setCoords(null);
       setPhotos([]);
+      setPriceMin("");
+      setPriceMax("");
+      setServicesOffered([]);
+      setTags([]);
+      setHoursDraft(null);
     }
     setError("");
   }, [visible, existing]);
@@ -80,6 +105,16 @@ export function ListingFormModal({
     setError("");
     if (photosBusy) { setError("Photos are still uploading. Wait a moment."); return; }
     if (!form.name.trim()) { setError("Service name is required."); return; }
+    const pMin = parsePrice(priceMin);
+    const pMax = parsePrice(priceMax);
+    if (pMin != null && pMax != null && pMin > pMax) {
+      setError("Minimum price can't be higher than the maximum.");
+      return;
+    }
+    if (hoursDraft) {
+      const hoursError = validateDraft(hoursDraft);
+      if (hoursError) { setError(hoursError); return; }
+    }
     if (!form.description.trim()) { setError("Please add a short description."); return; }
     if (!form.phone.trim() && !form.whatsapp.trim()) {
       setError("Add at least one contact method (phone or WhatsApp).");
@@ -103,6 +138,11 @@ export function ListingFormModal({
       latitude: coords?.lat ?? null,
       longitude: coords?.lng ?? null,
       photos,
+      priceMin: pMin,
+      priceMax: pMax,
+      servicesOffered,
+      tags,
+      hours: hoursDraft ? draftToHours(hoursDraft) : null,
       updatedAt: Date.now(),
     };
 
@@ -183,6 +223,44 @@ export function ListingFormModal({
         <View style={{ marginBottom: 16 }}>
           <PhotoPicker photos={photos} onChange={setPhotos} onUploadingChange={setPhotosBusy} />
         </View>
+
+        <Text style={formStyles.label}>Price range (₦, optional)</Text>
+        <View style={{ flexDirection: "row", gap: 10 }}>
+          <TextInput
+            style={[formStyles.input, { flex: 1 }]}
+            placeholder="From e.g. 2000"
+            placeholderTextColor="#bbb"
+            value={priceMin}
+            onChangeText={setPriceMin}
+            keyboardType="number-pad"
+          />
+          <TextInput
+            style={[formStyles.input, { flex: 1 }]}
+            placeholder="To e.g. 15000"
+            placeholderTextColor="#bbb"
+            value={priceMax}
+            onChangeText={setPriceMax}
+            keyboardType="number-pad"
+          />
+        </View>
+
+        <ChipInput
+          label="Services you offer (optional)"
+          placeholder="e.g. Laptop Repair"
+          values={servicesOffered}
+          onChange={setServicesOffered}
+        />
+
+        <ChipInput
+          label="Highlights (optional)"
+          placeholder="e.g. Fast Service"
+          values={tags}
+          onChange={setTags}
+          max={4}
+          suggestions={["Fast Service", "Student Friendly", "Affordable", "Delivery", "Open Late"]}
+        />
+
+        <HoursEditor draft={hoursDraft} onChange={setHoursDraft} />
 
         <Text style={formStyles.label}>Phone Number</Text>
         <TextInput

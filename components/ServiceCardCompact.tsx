@@ -2,6 +2,7 @@ import { ComponentType } from "react";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import type { LucideProps } from "lucide-react-native";
 import { TrustChip } from "./TrustChip";
+import { auth } from "../lib/firebase";
 import { formatPriceRange, isOpenNow, type ServiceListing } from "../lib/serviceShared";
 
 const GREEN = "#1a5c38";
@@ -37,6 +38,7 @@ export function ServiceCardCompact({
   const showRating = typeof service.rating === "number" && (service.ratingCount ?? 0) >= 3;
   const priceLabel = formatPriceRange(service.priceMin, service.priceMax);
   const openNow = isOpenNow(service.hours);
+  const isMine = !!auth.currentUser && auth.currentUser.uid === service.userId;
 
   if (featured) {
     return (
@@ -58,6 +60,7 @@ export function ServiceCardCompact({
         <Text style={styles.featuredName} numberOfLines={1}>{service.name}</Text>
         <Text style={styles.featuredCategory} numberOfLines={1}>{categoryLabel}</Text>
         {priceLabel && <Text style={styles.featuredPrice} numberOfLines={1}>{priceLabel}</Text>}
+        {isMine && <Text style={styles.mineText}>Your listing</Text>}
       </TouchableOpacity>
     );
   }
@@ -86,6 +89,11 @@ export function ServiceCardCompact({
         <Text style={styles.category} numberOfLines={1}>{categoryLabel}</Text>
 
         <View style={styles.chipRow}>
+          {isMine ? (
+            <View style={styles.mineChip}>
+              <Text style={styles.mineChipText}>Your listing</Text>
+            </View>
+          ) : null}
           {showRating ? (
             <TrustChip variant="rating" value={service.rating!} count={service.ratingCount} />
           ) : service.verified ? (
@@ -161,6 +169,9 @@ const styles = StyleSheet.create({
   featuredName: { fontSize: 14, fontWeight: "800", color: "#1a1a1a" },
   featuredCategory: { fontSize: 12, color: "#a3aba3", marginTop: 2, fontWeight: "500" },
   featuredPrice: { fontSize: 12, color: GREEN, fontWeight: "700", marginTop: 3 },
+  mineText: { fontSize: 11, color: GREEN, fontWeight: "800", marginTop: 3 },
+  mineChip: { backgroundColor: GREEN, borderRadius: 10, paddingHorizontal: 9, paddingVertical: 4 },
+  mineChipText: { color: "#fff", fontSize: 11.5, fontWeight: "700" },
 });
 
 export default ServiceCardCompact;

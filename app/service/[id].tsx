@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import * as ExpoLocation from "expo-location";
 import { PhotoCarousel } from "../../components/ServicePhotos";
+import { ReportModal } from "../../components/ReportModal";
+import { RateService } from "../../components/RateService";
 import {
   ActivityIndicator,
   Alert,
@@ -52,6 +54,7 @@ export default function ServiceDetailsScreen() {
   const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null);
   const [isFavorited, setIsFavorited] = useState(false);
   const userId = auth.currentUser?.uid ?? null;
+  const [reportOpen, setReportOpen] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -166,6 +169,18 @@ export default function ServiceDetailsScreen() {
         service!.description ? ` — ${service!.description}` : ""
       }`,
     }).catch(() => {});
+  }
+
+  function submitReport(reason: string) {
+    setReportOpen(false);
+    if (!userId || !id) return;
+    set(ref(database, `reports/${id}/${userId}`), {
+      reason,
+      serviceName: service!.name,
+      createdAt: Date.now(),
+    })
+      .then(() => Alert.alert("Reported", "Thanks. Our team will review this listing."))
+      .catch(() => Alert.alert("Error", "Could not send your report. Try again."));
   }
 
   function toggleFavorite() {
@@ -341,12 +356,20 @@ export default function ServiceDetailsScreen() {
           </View>
         </View>
 
+        <RateService serviceId={service.id} ownerId={service.userId} uid={userId} />
+
         {/* Report */}
-        <TouchableOpacity style={styles.reportLink} onPress={handleReport}>
+        <TouchableOpacity style={styles.reportLink} onPress={() => setReportOpen(true)}>
           <Flag size={13} color="#aaa" strokeWidth={2.2} />
           <Text style={styles.reportText}>Report this listing</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <ReportModal
+        visible={reportOpen}
+        onClose={() => setReportOpen(false)}
+        onSubmit={submitReport}
+      />
     </View>
   );
 }
