@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import { Animated, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { AlertTriangle, Pencil, RotateCw, ShoppingBag, Trash2 } from "lucide-react-native";
-import { GREEN, GREEN_BRIGHT, SUBSCRIPTION_FEE, ServiceListing, SERVICE_CATEGORIES, daysLeft } from "../lib/serviceShared";
+import { GREEN, GREEN_BRIGHT, SUBSCRIPTION_FEE, ServiceListing, SERVICE_CATEGORIES, daysLeft, formatPriceRange, isOpenNow } from "../lib/serviceShared";
 
 export function MyListingPanel({
   myService, onEdit, onDelete, onActivate,
@@ -78,6 +78,22 @@ export function MyListingPanel({
       </View>
       <Text style={myStyles.listingDesc} numberOfLines={2}>{myService.description}</Text>
 
+      {(() => {
+        const priceLabel = formatPriceRange(myService.priceMin, myService.priceMax);
+        const openNow = isOpenNow(myService.hours);
+        if (!priceLabel && openNow == null) return null;
+        return (
+          <View style={myStyles.metaRow}>
+            {priceLabel ? <Text style={myStyles.metaText}>{priceLabel}</Text> : null}
+            {openNow != null ? (
+              <Text style={[myStyles.metaText, { color: openNow ? GREEN : "#cc2222" }]}>
+                {openNow ? "Open now" : "Closed"}
+              </Text>
+            ) : null}
+          </View>
+        );
+      })()}
+
       <View style={myStyles.actions}>
         <TouchableOpacity style={[myStyles.editBtn, myStyles.rowBox]} onPress={onEdit}>
           <Pencil size={14} color={GREEN} strokeWidth={2.2} />
@@ -133,6 +149,8 @@ const myStyles = StyleSheet.create({
   listingCatRow: { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 6 },
   listingCat: { fontSize: 13, color: "#666" },
   listingDesc: { fontSize: 13, color: "#888", lineHeight: 18, marginBottom: 14 },
+  metaRow: { flexDirection: "row", gap: 10, marginBottom: 14 },
+  metaText: { fontSize: 12, fontWeight: "700", color: "#556155" },
   actions: { flexDirection: "row", gap: 10, marginBottom: 14 },
   editBtn: { flex: 1, backgroundColor: "#EAF6EE", borderRadius: 10, padding: 12, alignItems: "center", borderWidth: 1.5, borderColor: "#c8e6d4" },
   editBtnText: { color: GREEN, fontSize: 14, fontWeight: "700" },

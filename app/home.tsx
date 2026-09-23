@@ -21,6 +21,7 @@ import {
   Footprints,
   History,
   Home,
+   Store,
   LocateFixed,
   LogOut,
   MapPin,
@@ -28,7 +29,6 @@ import {
   Play,
   Route,
   Search,
-  ShoppingBag,
   User,
   UserPlus,
   Users,
@@ -3263,7 +3263,7 @@ export default function HomeScreen() {
             onPress={() => router.push("./service")}
             activeOpacity={0.85}
           >
-            <ShoppingBag size={22} color="#fff" strokeWidth={2.2} />
+         <Store size={22} color="#fff" strokeWidth={2.2} />
           </TouchableOpacity>
         )}
 

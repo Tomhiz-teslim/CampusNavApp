@@ -33,7 +33,7 @@ import {
   Save,
   Search,
   Settings,
-  ShoppingBag,
+  Store,
   Trash2,
   User,
   Users,
@@ -2371,7 +2371,7 @@ function UserAccount() {
     info?: { title: string; Icon: ComponentType<any>; body: string };
   }[] = [
     {
-      Icon: ShoppingBag,
+      Icon: Store,
       label: "Campus Services",
       sub: "Directory of services around campus",
       route: "/service",

@@ -1,29 +1,38 @@
 import { useEffect, useState } from "react";
+import * as ExpoLocation from "expo-location";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Linking,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { onValue, ref } from "firebase/database";
-import { database } from "../../lib/firebase";
+import { onValue, ref, remove, serverTimestamp, set } from "firebase/database";
+import { auth, database } from "../../lib/firebase";
+import MapView, { Marker } from "react-native-maps";
 import {
   ChevronLeft,
   Flag,
+  Heart,
   MapPin,
   MessageCircle,
   Navigation,
   Phone,
+  Share2,
   ShoppingBag,
 } from "lucide-react-native";
 import { TrustChip } from "../../components/TrustChip";
 import {
   formatDistance,
+  formatWeeklyHours,
+  getDistanceMeters,
+  isOpenNow,
   normalizePhone,
   SERVICE_CATEGORIES,
   type ServiceListing,
@@ -32,12 +41,29 @@ import {
 const GREEN = "#1a5c38";
 const GREEN_TINT = "#EAF6EE";
 const BG = "#F5F7F5";
+const HERO_HEIGHT = 220;
 
 export default function ServiceDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const [service, setService] = useState<ServiceListing | null>(null);
   const [loading, setLoading] = useState(true);
+  const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null);
+  const [isFavorited, setIsFavorited] = useState(false);
+  const userId = auth.currentUser?.uid ?? null;
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { status } = await ExpoLocation.requestForegroundPermissionsAsync();
+        if (status !== "granted") return;
+        const loc = await ExpoLocation.getCurrentPositionAsync({ accuracy: ExpoLocation.Accuracy.Balanced });
+        setUserLoc({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+      } catch {
+        /* silent — page just falls back to the text location */
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -47,6 +73,19 @@ export default function ServiceDetailsScreen() {
     });
     return () => unsub();
   }, [id]);
+
+  useEffect(() => {
+    if (!userId || !id) return;
+    const unsub = onValue(ref(database, `bookmarks/${userId}/${id}`), (snap) => {
+      setIsFavorited(snap.exists());
+    });
+    return () => unsub();
+  }, [userId, id]);
+
+  useEffect(() => {
+    if (!userId || !id || !service) return;
+    set(ref(database, `recentlyViewed/${userId}/${id}`), serverTimestamp()).catch(() => {});
+  }, [userId, id, service?.id]);
 
   if (loading) {
     return (
@@ -70,6 +109,13 @@ export default function ServiceDetailsScreen() {
   const cat = SERVICE_CATEGORIES.find((c) => c.key === service.category);
   const CatIcon = cat?.icon ?? ShoppingBag;
   const showRating = typeof service.rating === "number" && (service.ratingCount ?? 0) >= 3;
+  const distanceM =
+    userLoc && service.latitude != null && service.longitude != null
+      ? getDistanceMeters(userLoc.lat, userLoc.lng, service.latitude, service.longitude)
+      : null;
+  const openNow = isOpenNow(service.hours);
+  const hoursRows = formatWeeklyHours(service.hours);
+  const hasMapPin = service.latitude != null && service.longitude != null;
 
   function openWhatsApp() {
     if (!service!.whatsapp) return;
@@ -113,25 +159,63 @@ export default function ServiceDetailsScreen() {
     );
   }
 
+  function handleShare() {
+    Share.share({
+      message: `Check out ${service!.name} on Campus Services${
+        service!.description ? ` — ${service!.description}` : ""
+      }`,
+    }).catch(() => {});
+  }
+
+  function toggleFavorite() {
+    if (!userId || !id) return;
+    const bookmarkRef = ref(database, `bookmarks/${userId}/${id}`);
+    if (isFavorited) {
+      remove(bookmarkRef).catch(() => Alert.alert("Error", "Could not remove bookmark."));
+    } else {
+      set(bookmarkRef, serverTimestamp()).catch(() => Alert.alert("Error", "Could not save bookmark."));
+    }
+  }
+
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+      <View style={styles.heroWrap}>
+        {service.photos?.[0] ? (
+          <Image source={{ uri: service.photos[0] }} style={styles.heroImage} />
+        ) : (
+          <View style={[styles.heroImage, styles.heroImagePlaceholder]}>
+            <CatIcon size={44} color={GREEN} strokeWidth={1.8} />
+          </View>
+        )}
+        <TouchableOpacity onPress={() => router.back()} style={styles.heroBackBtn}>
           <ChevronLeft size={22} color="#fff" strokeWidth={2.4} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>{cat?.label ?? "Service"}</Text>
-        <View style={{ width: 34 }} />
+        <View style={styles.heroActionsRow}>
+          <TouchableOpacity onPress={toggleFavorite} style={styles.heroIconBtn}>
+            <Heart
+              size={18}
+              color={isFavorited ? "#e0455f" : "#fff"}
+              fill={isFavorited ? "#e0455f" : "transparent"}
+              strokeWidth={2.2}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleShare} style={styles.heroIconBtn}>
+            <Share2 size={18} color="#fff" strokeWidth={2.2} />
+          </TouchableOpacity>
+        </View>
+        {service.verified && (
+          <View style={styles.heroVerifiedBadge}>
+            <Text style={styles.heroVerifiedText}>✓ Verified Provider</Text>
+          </View>
+        )}
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Identity */}
         <View style={styles.identityRow}>
-          <View style={styles.iconCircle}>
-            <CatIcon size={30} color={GREEN} strokeWidth={2} />
-          </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.name}>{service.name}</Text>
-            <Text style={styles.provider}>{service.providerName}</Text>
+            <Text style={styles.provider}>{cat?.label ?? service.providerName}</Text>
           </View>
         </View>
 
@@ -140,8 +224,22 @@ export default function ServiceDetailsScreen() {
           {showRating && (
             <TrustChip variant="rating" value={service.rating!} count={service.ratingCount} />
           )}
-          {service.verified && <TrustChip variant="verified" />}
+          {distanceM != null && (
+            <TrustChip variant="distance" label={formatDistance(distanceM)} />
+          )}
+          {openNow != null && <TrustChip variant="open" isOpen={openNow} />}
         </View>
+
+        {/* Trait tags */}
+        {service.tags && service.tags.length > 0 && (
+          <View style={styles.chipWrapRow}>
+            {service.tags.map((tag) => (
+              <View key={tag} style={styles.traitChip}>
+                <Text style={styles.traitChipText}>{tag}</Text>
+              </View>
+            ))}
+          </View>
+        )}
 
         {/* Description */}
         {service.description ? (
@@ -150,6 +248,37 @@ export default function ServiceDetailsScreen() {
             <Text style={styles.description}>{service.description}</Text>
           </View>
         ) : null}
+
+        {/* Services offered */}
+        {service.servicesOffered && service.servicesOffered.length > 0 && (
+          <View style={styles.card}>
+            <Text style={styles.sectionLabel}>SERVICES</Text>
+            <View style={styles.chipWrapRow}>
+              {service.servicesOffered.map((s) => (
+                <View key={s} style={styles.serviceChip}>
+                  <Text style={styles.serviceChipText}>{s}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Business hours */}
+        {hoursRows.length > 0 && (
+          <View style={styles.card}>
+            <Text style={styles.sectionLabel}>BUSINESS HOURS</Text>
+            {hoursRows.map((row) => (
+              <View key={row.label} style={styles.hoursRow}>
+                <Text style={styles.hoursDayText}>{row.label}</Text>
+                <Text
+                  style={[styles.hoursValueText, row.value === "Closed" && styles.hoursValueClosed]}
+                >
+                  {row.value}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
 
         {/* Location */}
         <View style={styles.card}>
@@ -160,6 +289,22 @@ export default function ServiceDetailsScreen() {
               {service.location || "No location description provided"}
             </Text>
           </View>
+          {hasMapPin && (
+            <View style={styles.miniMapWrap}>
+              <MapView
+                style={styles.miniMap}
+                pointerEvents="none"
+                initialRegion={{
+                  latitude: service.latitude!,
+                  longitude: service.longitude!,
+                  latitudeDelta: 0.004,
+                  longitudeDelta: 0.004,
+                }}
+              >
+                <Marker coordinate={{ latitude: service.latitude!, longitude: service.longitude! }} />
+              </MapView>
+            </View>
+          )}
           <TouchableOpacity
             style={[styles.directionsBtn, service.latitude == null && styles.btnDisabled]}
             onPress={openDirections}
@@ -268,4 +413,40 @@ const styles = StyleSheet.create({
 
   reportLink: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 16 },
   reportText: { fontSize: 12, color: "#aaa", fontWeight: "500" },
+
+  heroWrap: { width: "100%", height: HERO_HEIGHT, position: "relative", backgroundColor: GREEN_TINT },
+  heroImage: { width: "100%", height: "100%" },
+  heroImagePlaceholder: { alignItems: "center", justifyContent: "center" },
+  heroBackBtn: {
+    position: "absolute", top: 56, left: 14,
+    width: 34, height: 34, borderRadius: 17,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    alignItems: "center", justifyContent: "center",
+  },
+  heroActionsRow: { position: "absolute", top: 56, right: 14, flexDirection: "row", gap: 8 },
+  heroIconBtn: {
+    width: 34, height: 34, borderRadius: 17,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    alignItems: "center", justifyContent: "center",
+  },
+  heroVerifiedBadge: {
+    position: "absolute", bottom: 12, left: 14,
+    backgroundColor: "#fff", borderRadius: 14,
+    paddingHorizontal: 10, paddingVertical: 5,
+  },
+  heroVerifiedText: { fontSize: 12, fontWeight: "700", color: GREEN },
+
+  chipWrapRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 4 },
+  traitChip: { backgroundColor: GREEN_TINT, borderRadius: 12, paddingHorizontal: 11, paddingVertical: 6 },
+  traitChipText: { fontSize: 12, fontWeight: "600", color: GREEN },
+  serviceChip: { backgroundColor: "#f2f2f2", borderRadius: 12, paddingHorizontal: 11, paddingVertical: 6 },
+  serviceChipText: { fontSize: 12, fontWeight: "600", color: "#555" },
+
+  hoursRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 6 },
+  hoursDayText: { fontSize: 13.5, color: "#444", fontWeight: "600" },
+  hoursValueText: { fontSize: 13.5, color: "#444" },
+  hoursValueClosed: { color: "#c0392b", fontWeight: "600" },
+
+  miniMapWrap: { height: 130, borderRadius: 12, overflow: "hidden", marginBottom: 14, borderWidth: 1, borderColor: "#eee" },
+  miniMap: { width: "100%", height: "100%" },
 });

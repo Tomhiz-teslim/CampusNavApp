@@ -8,17 +8,30 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import * as ExpoLocation from "expo-location";
 import { useRouter } from "expo-router";
 import { onValue, ref } from "firebase/database";
 import { database } from "../lib/firebase";
-import { ChevronLeft, Search as SearchIcon, X, Clock } from "lucide-react-native";
-import { CategoryChip } from "../components/CategoryChip";
+import { ChevronLeft, ChevronRight, Search as SearchIcon, X, Clock } from "lucide-react-native";
 import { ServiceCardCompact } from "../components/ServiceCardCompact";
-import { SERVICE_CATEGORIES, type ServiceListing } from "../lib/serviceShared";
+import {
+  SERVICE_CATEGORIES,
+  getDistanceMeters,
+  type ServiceListing,
+} from "../lib/serviceShared";
 
 const GREEN = "#1a5c38";
 const BG = "#F5F7F5";
 const MAX_RECENTS = 5;
+
+type FilterKey = "all" | "near" | "top" | "verified";
+
+const FILTERS: { key: FilterKey; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "near", label: "Near you" },
+  { key: "top", label: "Top rated" },
+  { key: "verified", label: "Verified" },
+];
 
 export default function SearchScreen() {
   const router = useRouter();
@@ -26,6 +39,21 @@ export default function SearchScreen() {
   const [services, setServices] = useState<ServiceListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [recents, setRecents] = useState<string[]>([]);
+  const [filter, setFilter] = useState<FilterKey>("all");
+  const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { status } = await ExpoLocation.requestForegroundPermissionsAsync();
+        if (status !== "granted") return;
+        const loc = await ExpoLocation.getCurrentPositionAsync({ accuracy: ExpoLocation.Accuracy.Balanced });
+        setUserLoc({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+      } catch {
+        /* silent — results just fall back to text location / no distance sort */
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     const unsub = onValue(ref(database, "services"), (snap) => {
@@ -40,19 +68,46 @@ export default function SearchScreen() {
     return () => unsub();
   }, []);
 
-  const results = useMemo(() => {
+  const matched = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
-    return services.filter((s) => {
-      const catLabel = SERVICE_CATEGORIES.find((c) => c.key === s.category)?.label ?? "";
-      return (
-        s.name.toLowerCase().includes(q) ||
-        s.description.toLowerCase().includes(q) ||
-        s.location.toLowerCase().includes(q) ||
-        catLabel.toLowerCase().includes(q)
-      );
-    });
-  }, [services, query]);
+    return services
+      .filter((s) => {
+        const catLabel = SERVICE_CATEGORIES.find((c) => c.key === s.category)?.label ?? "";
+        return (
+          s.name.toLowerCase().includes(q) ||
+          s.description.toLowerCase().includes(q) ||
+          s.location.toLowerCase().includes(q) ||
+          catLabel.toLowerCase().includes(q)
+        );
+      })
+      .map((s) => ({
+        service: s,
+        distance:
+          userLoc && s.latitude != null && s.longitude != null
+            ? getDistanceMeters(userLoc.lat, userLoc.lng, s.latitude, s.longitude)
+            : null,
+      }));
+  }, [services, query, userLoc]);
+
+  const results = useMemo(() => {
+    const list = [...matched];
+    if (filter === "verified") {
+      return list.filter((r) => r.service.verified);
+    }
+    if (filter === "near") {
+      return list.sort((a, b) => {
+        if (a.distance != null && b.distance != null) return a.distance - b.distance;
+        if (a.distance != null) return -1;
+        if (b.distance != null) return 1;
+        return 0;
+      });
+    }
+    if (filter === "top") {
+      return list.sort((a, b) => (b.service.rating ?? 0) - (a.service.rating ?? 0));
+    }
+    return list;
+  }, [matched, filter]);
 
   function commitSearch(term: string) {
     const clean = term.trim();
@@ -64,6 +119,7 @@ export default function SearchScreen() {
     const label = SERVICE_CATEGORIES.find((c) => c.key === key)?.label ?? "";
     setQuery(label);
     commitSearch(label);
+    setFilter("all");
   }
 
   const showingResults = query.trim().length > 0;
@@ -94,6 +150,32 @@ export default function SearchScreen() {
         </View>
       </View>
 
+      {showingResults && (
+        <View style={styles.filterBarWrap}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterBar}
+          >
+            {FILTERS.map((f) => {
+              const active = filter === f.key;
+              return (
+                <TouchableOpacity
+                  key={f.key}
+                  style={[styles.filterChip, active && styles.filterChipActive]}
+                  onPress={() => setFilter(f.key)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+                    {f.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
+
       <ScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
@@ -119,15 +201,21 @@ export default function SearchScreen() {
               </>
             )}
 
-            <Text style={styles.sectionLabel}>BROWSE BY CATEGORY</Text>
-            <View style={styles.categoryWrap}>
+            <Text style={styles.sectionLabel}>POPULAR SEARCHES</Text>
+            <View style={styles.popularList}>
               {SERVICE_CATEGORIES.filter((c) => c.key !== "all").map((cat) => (
-                <CategoryChip
+                <TouchableOpacity
                   key={cat.key}
-                  icon={cat.icon}
-                  label={cat.label}
+                  style={styles.popularRow}
                   onPress={() => handleCategoryTap(cat.key)}
-                />
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.popularRowLeft}>
+                    <cat.icon size={16} color={GREEN} strokeWidth={2.1} />
+                    <Text style={styles.popularRowText}>{cat.label}</Text>
+                  </View>
+                  <ChevronRight size={16} color="#ccc" strokeWidth={2.2} />
+                </TouchableOpacity>
               ))}
             </View>
           </>
@@ -140,22 +228,28 @@ export default function SearchScreen() {
             <Text style={styles.emptySub}>Try a different term or browse a category instead.</Text>
           </View>
         ) : (
-          results.map((service) => {
-            const cat = SERVICE_CATEGORIES.find((c) => c.key === service.category);
-            return (
-              <ServiceCardCompact
-                key={service.id}
-                service={service}
-                distanceM={null}
-                categoryIcon={cat?.icon ?? SearchIcon}
-                categoryLabel={cat?.label ?? service.category}
-                onPress={() => {
-                  commitSearch(query);
-                  router.push(`/service/${service.id}` as any);
-                }}
-              />
-            );
-          })
+          <>
+            <Text style={styles.resultCount}>
+              {results.length} result{results.length !== 1 ? "s" : ""}
+              {userLoc ? " near you" : ""}
+            </Text>
+            {results.map(({ service, distance }) => {
+              const cat = SERVICE_CATEGORIES.find((c) => c.key === service.category);
+              return (
+                <ServiceCardCompact
+                  key={service.id}
+                  service={service}
+                  distanceM={distance}
+                  categoryIcon={cat?.icon ?? SearchIcon}
+                  categoryLabel={cat?.label ?? service.category}
+                  onPress={() => {
+                    commitSearch(query);
+                    router.push(`/service/${service.id}` as any);
+                  }}
+                />
+              );
+            })}
+          </>
         )}
       </ScrollView>
     </View>
@@ -187,6 +281,19 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, fontSize: 15, color: "#1a1a1a" },
 
+  filterBarWrap: { backgroundColor: GREEN, paddingBottom: 12 },
+  filterBar: { paddingHorizontal: 12, gap: 8 },
+  filterChip: {
+    backgroundColor: "rgba(255,255,255,0.14)",
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    marginRight: 8,
+  },
+  filterChipActive: { backgroundColor: "#fff" },
+  filterChipText: { fontSize: 13, fontWeight: "600", color: "#fff" },
+  filterChipTextActive: { color: GREEN },
+
   content: { padding: 16, paddingBottom: 40 },
   sectionLabel: {
     fontSize: 11,
@@ -206,7 +313,20 @@ const styles = StyleSheet.create({
   },
   recentText: { fontSize: 14, color: "#333", fontWeight: "500" },
 
-  categoryWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  popularList: { backgroundColor: "#fff", borderRadius: 14, overflow: "hidden" },
+  popularRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+  },
+  popularRowLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
+  popularRowText: { fontSize: 14, color: "#333", fontWeight: "600" },
+
+  resultCount: { fontSize: 12.5, color: "#8a938a", fontWeight: "600", marginBottom: 10 },
 
   emptyState: { alignItems: "center", paddingTop: 60, gap: 10 },
   emptyTitle: { fontSize: 15, fontWeight: "700", color: "#555" },
