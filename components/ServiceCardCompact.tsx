@@ -68,9 +68,16 @@ export function ServiceCardCompact({
       onPress={onPress}
       activeOpacity={0.85}
     >
-      <View style={[styles.iconCircle, compact && styles.iconCircleCompact]}>
-        <CategoryIcon size={compact ? 18 : 22} color={GREEN} strokeWidth={2} />
-      </View>
+      {service.photos?.[0] ? (
+        <Image
+          source={{ uri: service.photos[0] }}
+          style={compact ? styles.photoCompact : styles.photoRow}
+        />
+      ) : (
+        <View style={[styles.iconCircle, compact && styles.iconCircleCompact]}>
+          <CategoryIcon size={compact ? 18 : 22} color={GREEN} strokeWidth={2} />
+        </View>
+      )}
 
       <View style={compact ? undefined : styles.body}>
         <Text style={[styles.name, compact && styles.nameCompact]} numberOfLines={1}>
@@ -130,6 +137,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   iconCircleCompact: { width: 36, height: 36, borderRadius: 18 },
+  photoRow: { width: 64, height: 64, borderRadius: 14, backgroundColor: GREEN_TINT },
+  photoCompact: { width: "100%", height: 110, borderRadius: 12, backgroundColor: GREEN_TINT },
   body: { flex: 1 },
   name: { fontSize: 15.5, fontWeight: "800", color: "#1a1a1a", letterSpacing: -0.2 },
   nameCompact: { fontSize: 14 },

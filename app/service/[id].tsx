@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import * as ExpoLocation from "expo-location";
+import { PhotoCarousel } from "../../components/ServicePhotos";
 import {
   ActivityIndicator,
   Alert,
@@ -181,7 +182,7 @@ export default function ServiceDetailsScreen() {
     <View style={styles.container}>
       <View style={styles.heroWrap}>
         {service.photos?.[0] ? (
-          <Image source={{ uri: service.photos[0] }} style={styles.heroImage} />
+          <PhotoCarousel photos={service.photos} height={HERO_HEIGHT} />
         ) : (
           <View style={[styles.heroImage, styles.heroImagePlaceholder]}>
             <CatIcon size={44} color={GREEN} strokeWidth={1.8} />

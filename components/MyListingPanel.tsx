@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { Animated, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Animated, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { AlertTriangle, Pencil, RotateCw, ShoppingBag, Trash2 } from "lucide-react-native";
 import { GREEN, GREEN_BRIGHT, SUBSCRIPTION_FEE, ServiceListing, SERVICE_CATEGORIES, daysLeft, formatPriceRange, isOpenNow } from "../lib/serviceShared";
 
@@ -64,6 +64,27 @@ export function MyListingPanel({
             {onTrial ? "Trial ending soon!" : "Expiring soon!"} Renew to stay visible.
           </Text>
         </View>
+      )}
+
+      {myService.photos && myService.photos.length > 0 ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 8 }}
+          style={myStyles.photoStrip}
+        >
+          {myService.photos.map((uri, i) => (
+            <Image
+              key={uri}
+              source={{ uri }}
+              style={i === 0 ? myStyles.photoCover : myStyles.photoThumb}
+            />
+          ))}
+        </ScrollView>
+      ) : (
+        <TouchableOpacity style={myStyles.photoNudge} onPress={onEdit} activeOpacity={0.8}>
+          <Text style={myStyles.photoNudgeText}>+ Add photos to get more views</Text>
+        </TouchableOpacity>
       )}
 
       <Text style={myStyles.listingName}>{myService.name}</Text>
@@ -159,4 +180,12 @@ const myStyles = StyleSheet.create({
   payBtnText: { color: "#fff", fontSize: 15, fontWeight: "800" },
   payNote: { fontSize: 11, color: "#aaa", textAlign: "center", lineHeight: 16 },
   rowBox: { flexDirection: "row", alignItems: "center", gap: 6 },
+  photoStrip: { marginBottom: 14 },
+  photoCover: { width: 200, height: 120, borderRadius: 14, backgroundColor: "#EAF6EE" },
+  photoThumb: { width: 120, height: 120, borderRadius: 14, backgroundColor: "#EAF6EE" },
+  photoNudge: {
+    borderWidth: 1.5, borderColor: GREEN, borderStyle: "dashed", borderRadius: 14,
+    paddingVertical: 14, alignItems: "center", marginBottom: 14, backgroundColor: "#f6fbf8",
+  },
+  photoNudgeText: { color: GREEN, fontSize: 13, fontWeight: "700" },
 });

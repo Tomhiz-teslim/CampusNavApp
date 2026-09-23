@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View,
 } from "react-native";
+import { ProviderBanner } from "./ProviderBanner";
 import * as ExpoLocation from "expo-location";
 import { onValue, ref } from "firebase/database";
 import { database } from "../lib/firebase";
@@ -189,11 +190,15 @@ export default function ServicesTab({ userId }: { userId: string }) {
           </TouchableOpacity>
         </View>
 
+        {isDefaultView && (
+          <ProviderBanner onPress={() => router.push("/my-services" as any)} />
+        )}
+
         {isDefaultView && popular.length > 0 && (
           <View style={tabStyles.popularSection}>
             <View style={tabStyles.sectionHeaderRow}>
               <Text style={tabStyles.sectionLabel}>POPULAR RIGHT NOW</Text>
-              <TouchableOpacity onPress={() => {}}>
+              <TouchableOpacity onPress={() => router.push({ pathname: "/service-list", params: { type: "popular" } } as any)}>
                 <Text style={tabStyles.seeAllText}>See all</Text>
               </TouchableOpacity>
             </View>
@@ -224,7 +229,7 @@ export default function ServicesTab({ userId }: { userId: string }) {
           <View style={tabStyles.popularSection}>
             <View style={tabStyles.sectionHeaderRow}>
               <Text style={tabStyles.sectionLabel}>MY BOOKMARKS</Text>
-              <TouchableOpacity onPress={() => {}}>
+              <TouchableOpacity onPress={() => router.push({ pathname: "/service-list", params: { type: "bookmarks" } } as any)}>
                 <Text style={tabStyles.seeAllText}>See all</Text>
               </TouchableOpacity>
             </View>
@@ -255,7 +260,7 @@ export default function ServicesTab({ userId }: { userId: string }) {
           <View style={tabStyles.popularSection}>
             <View style={tabStyles.sectionHeaderRow}>
               <Text style={tabStyles.sectionLabel}>RECENTLY VIEWED</Text>
-              <TouchableOpacity onPress={() => {}}>
+              <TouchableOpacity onPress={() => router.push({ pathname: "/service-list", params: { type: "recent" } } as any)}>
                 <Text style={tabStyles.seeAllText}>See all</Text>
               </TouchableOpacity>
             </View>

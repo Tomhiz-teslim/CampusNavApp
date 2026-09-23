@@ -8,6 +8,7 @@ import { push, ref, set, update } from "firebase/database";
 import { auth, database } from "../lib/firebase";
 import { AlertTriangle, CheckCircle2, Lightbulb, Satellite } from "lucide-react-native";
 import { CategoryChip } from "./CategoryChip";
+import { PhotoPicker } from "./ServicePhotos";
 import {
   GREEN, GREEN_TINT, BG, SUBSCRIPTION_FEE, TRIAL_DURATION_MS,
   ServiceListing, SERVICE_CATEGORIES,
@@ -30,6 +31,8 @@ export function ListingFormModal({
   const [gpsLoading, setGpsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [photosBusy, setPhotosBusy] = useState(false);
 
   useEffect(() => {
     if (existing) {
@@ -42,6 +45,7 @@ export function ListingFormModal({
         instagram: existing.instagram,
         location: existing.location,
       });
+      setPhotos(existing.photos ?? []);
       setCoords(
         existing.latitude != null && existing.longitude != null
           ? { lat: existing.latitude, lng: existing.longitude }
@@ -50,6 +54,7 @@ export function ListingFormModal({
     } else {
       setForm({ name: "", category: "food", description: "", phone: "", whatsapp: "", instagram: "", location: "" });
       setCoords(null);
+      setPhotos([]);
     }
     setError("");
   }, [visible, existing]);
@@ -73,6 +78,7 @@ export function ListingFormModal({
 
   async function handleSave() {
     setError("");
+    if (photosBusy) { setError("Photos are still uploading. Wait a moment."); return; }
     if (!form.name.trim()) { setError("Service name is required."); return; }
     if (!form.description.trim()) { setError("Please add a short description."); return; }
     if (!form.phone.trim() && !form.whatsapp.trim()) {
@@ -96,6 +102,7 @@ export function ListingFormModal({
       location: form.location.trim(),
       latitude: coords?.lat ?? null,
       longitude: coords?.lng ?? null,
+      photos,
       updatedAt: Date.now(),
     };
 
@@ -172,6 +179,10 @@ export function ListingFormModal({
           multiline
           numberOfLines={3}
         />
+
+        <View style={{ marginBottom: 16 }}>
+          <PhotoPicker photos={photos} onChange={setPhotos} onUploadingChange={setPhotosBusy} />
+        </View>
 
         <Text style={formStyles.label}>Phone Number</Text>
         <TextInput
