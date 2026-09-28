@@ -331,15 +331,23 @@ export default function HomeScreen() {
   const [showAddFriend, setShowAddFriend] = useState(false);
   const [chatWith, setChatWith] = useState<any>(null);
 
+  const friendsExpandedRef = useRef(false);
+  useEffect(() => {
+    friendsExpandedRef.current = friendsExpanded;
+  }, [friendsExpanded]);
+
   const toggleFriendsSheet = useCallback((expand: boolean) => {
+    if (friendsExpandedRef.current === expand) return;
+    friendsExpandedRef.current = expand;
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setFriendsExpanded(expand);
   }, []);
 
   const sheetPan = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 6,
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, g) =>
+        Math.abs(g.dy) > 8 && Math.abs(g.dy) > Math.abs(g.dx),
       onPanResponderRelease: (_, g) => {
         if (g.dy < -30) toggleFriendsSheet(true); // swipe up → full screen
         else if (g.dy > 30) toggleFriendsSheet(false); // swipe down → half
@@ -2237,7 +2245,7 @@ export default function HomeScreen() {
           <View style={styles.fHandle} />
         </View>
 
-        <View style={styles.fHeaderRow}>
+         <View {...sheetPan.panHandlers} style={styles.fHeaderRow}>
           <View style={styles.fHeaderIcon}>
             <Users size={20} color="#fff" strokeWidth={2.4} />
           </View>
@@ -2263,7 +2271,7 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <View style={styles.fTabs}>
+        <View {...sheetPan.panHandlers} style={styles.fTabs}>
           {tabs.map((t) => {
             const active = friendsFilter === t.key;
             return (
@@ -3818,7 +3826,31 @@ export default function HomeScreen() {
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="on-drag"
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ flexGrow: 1 }}
+                            contentContainerStyle={{
+                flexGrow: 1,
+                // keeps the half sheet scrollable so a swipe always registers
+                paddingBottom:
+                  activeTab === "friends" && !friendsExpanded
+                    ? Math.round(SCREEN_HEIGHT * 0.3)
+                    : 0,
+              }}
+              scrollEventThrottle={16}
+              onScroll={(e) => {
+                if (
+                  activeTab === "friends" &&
+                  !friendsExpandedRef.current &&
+                  e.nativeEvent.contentOffset.y > 12
+                )
+                  toggleFriendsSheet(true);
+              }}
+              onScrollEndDrag={(e) => {
+                if (
+                  activeTab === "friends" &&
+                  friendsExpandedRef.current &&
+                  e.nativeEvent.contentOffset.y < -40
+                )
+                  toggleFriendsSheet(false);
+              }}
             >
               {renderBottomContent()}
             </ScrollView>
@@ -3902,6 +3934,16 @@ export default function HomeScreen() {
       {/* ── NAVIGATION STEPS SHEET ── */}
       {navigating && directions && (
         <View style={styles.navStepsSheet}>{renderDirectionsPanel()}</View>
+      )}
+
+             {/* ── CHAT ── */}
+      {chatWith && (
+        <ChatScreen
+          userId={userId}
+          friend={chatWith}
+          photo={friendPhotos[chatWith.uid]}
+          onClose={() => setChatWith(null)}
+        />
       )}
 
       {/* ── AR MODE OVERLAY ── */}
