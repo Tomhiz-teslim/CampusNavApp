@@ -22,7 +22,8 @@ import {
   History,
   Home,
    Store,
-  LocateFixed,
+    LocateFixed,
+  MessageCircle,
   LogOut,
   MapPin,
   Navigation,
@@ -43,6 +44,9 @@ import {
   Dimensions,
   Image,
   Keyboard,
+  LayoutAnimation,
+  PanResponder,
+  UIManager,
   Platform,
   ScrollView,
   Share,
@@ -55,6 +59,7 @@ import {
 } from "react-native";
 import MapView from "react-native-map-clustering";
 import { Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
+import ChatScreen from "../components/ChatScreen";
 import CompassPointer from "../components/CompassPointer";
 import {
   BuildingMarker,
@@ -80,6 +85,10 @@ import {
 import { StyledModal, useStyledModal } from "./StyledModal";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 // ── Selected Location Card ────────────────────────────────────────────────────
 
@@ -315,6 +324,28 @@ export default function HomeScreen() {
   const [eventsLoaded, setEventsLoaded] = useState(false);
   const [communityLoaded, setCommunityLoaded] = useState(false);
   const [arMode, setArMode] = useState(false);
+
+  // Friends sheet
+  const [friendsExpanded, setFriendsExpanded] = useState(false);
+  const [friendsFilter, setFriendsFilter] = useState<"all" | "nearby" | "online">("all");
+  const [showAddFriend, setShowAddFriend] = useState(false);
+  const [chatWith, setChatWith] = useState<any>(null);
+
+  const toggleFriendsSheet = useCallback((expand: boolean) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setFriendsExpanded(expand);
+  }, []);
+
+  const sheetPan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 6,
+      onPanResponderRelease: (_, g) => {
+        if (g.dy < -30) toggleFriendsSheet(true); // swipe up → full screen
+        else if (g.dy > 30) toggleFriendsSheet(false); // swipe down → half
+      },
+    }),
+  ).current;
 
   // ── NEW: distance to destination for CompassPointer ──
   const [distanceToDestination, setDistanceToDestination] =
@@ -2077,7 +2108,394 @@ export default function HomeScreen() {
   }
 
   // ── Friends tab ────────────────────────────────────────────────────────────
+   function formatLastSeen(ts?: number) {
+    if (!ts) return "Location hidden";
+    const mins = Math.max(1, Math.round((Date.now() - ts) / 60000));
+    if (mins < 60) return `Last seen ${mins}m ago`;
+    const hrs = Math.round(mins / 60);
+    if (hrs < 24) return `Last seen ${hrs}h ago`;
+    return `Last seen ${Math.round(hrs / 24)}d ago`;
+  }
+
   function renderFriendsTab() {
+    const now = Date.now();
+    const enriched: any[] = friends.map((f: any) => {
+      const loc = friendLocations.find((fl) => fl.uid === f.uid);
+      const online = !!loc && now - (loc.updatedAt || 0) < 5 * 60 * 1000;
+      const dist =
+        loc && userLocation
+          ? haversineMetres(
+              userLocation.latitude,
+              userLocation.longitude,
+              loc.latitude,
+              loc.longitude,
+            )
+          : null;
+      return { ...f, loc, online, dist };
+    });
+    const onlineList = enriched.filter((f) => f.online);
+    const nearbyList = onlineList
+      .filter((f) => f.dist !== null && f.dist <= 800)
+      .sort((a, b) => a.dist - b.dist);
+    const source =
+      friendsFilter === "nearby"
+        ? nearbyList
+        : friendsFilter === "online"
+          ? onlineList
+          : enriched;
+    const list = [...source].sort((a, b) => {
+      if (a.online !== b.online) return a.online ? -1 : 1;
+      return (a.dist ?? 1e9) - (b.dist ?? 1e9);
+    });
+
+    function avatar(uid: string, name: string, size: number) {
+      const photo = friendPhotos[uid];
+      return photo ? (
+        <Image
+          source={{ uri: `data:image/jpeg;base64,${photo}` }}
+          style={{ width: size, height: size, borderRadius: size / 2 }}
+        />
+      ) : (
+        <View
+          style={{
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+            backgroundColor: "#1a5c38",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <Text style={{ color: "#fff", fontWeight: "700", fontSize: size * 0.4 }}>
+            {(name || "?")[0].toUpperCase()}
+          </Text>
+        </View>
+      );
+    }
+
+    async function locateFriend(f: any) {
+      const loc = f.loc;
+      if (!loc) return;
+      const dest = {
+        name: f.name,
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        icon: "👤",
+        description: "Friend's live location",
+        category: "friend",
+      };
+      setSelected(dest);
+      setDirections(null);
+      setActiveStep(0);
+      setNavigating(false);
+      setFriendsExpanded(false);
+      setActiveTab("home");
+
+      const location = userLocationRef.current;
+      if (!location) {
+        mapRef.current?.animateToRegion(
+          {
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+            latitudeDelta: 0.005,
+            longitudeDelta: 0.005,
+          },
+          800,
+        );
+        return;
+      }
+      setLoadingDirs(true);
+      const result = await fetchDirections(
+        location.latitude,
+        location.longitude,
+        loc.latitude,
+        loc.longitude,
+        travelMode,
+      );
+      setLoadingDirs(false);
+      if (!result) {
+        showAlert("No route found", "Could not calculate a route to your friend.", Route);
+        return;
+      }
+      setDirections(result);
+      mapRef.current?.fitToCoordinates(
+        [location, ...result.polylinePoints, { latitude: loc.latitude, longitude: loc.longitude }],
+        { edgePadding: { top: 120, right: 40, bottom: 380, left: 40 }, animated: true },
+      );
+    }
+
+    const tabs = [
+      { key: "all", label: "All", count: enriched.length },
+      { key: "nearby", label: "Nearby", count: nearbyList.length },
+      { key: "online", label: "Online", count: onlineList.length },
+    ] as const;
+
+    return (
+      <View>
+        {/* drag handle: swipe up = full screen, down = half */}
+        <View {...sheetPan.panHandlers} style={styles.fHandleZone}>
+          <View style={styles.fHandle} />
+        </View>
+
+        <View style={styles.fHeaderRow}>
+          <View style={styles.fHeaderIcon}>
+            <Users size={20} color="#fff" strokeWidth={2.4} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.fTitle}>Friends</Text>
+            <Text style={styles.fSubtitle}>See who's around, stay connected.</Text>
+          </View>
+          <View style={{ alignItems: "center" }}>
+            <Switch
+              value={sharingLocation}
+              onValueChange={(val) => {
+                setSharingLocation(val);
+                if (!val)
+                  showAlert("Location hidden", "Friends can no longer see you.", EyeOff);
+              }}
+              trackColor={{ false: "#ddd", true: "#4a8c63" }}
+              thumbColor={sharingLocation ? "#1a5c38" : "#aaa"}
+              style={{ transform: [{ scale: 0.85 }] }}
+            />
+            <Text style={styles.fShareLabel}>
+              {sharingLocation ? "Sharing" : "Hidden"}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.fTabs}>
+          {tabs.map((t) => {
+            const active = friendsFilter === t.key;
+            return (
+              <TouchableOpacity
+                key={t.key}
+                style={[styles.fTab, active && styles.fTabActive]}
+                onPress={() => setFriendsFilter(t.key)}
+              >
+                {t.key === "all" && (
+                  <Users size={14} color={active ? "#fff" : "#555"} strokeWidth={2.4} />
+                )}
+                {t.key === "nearby" && (
+                  <MapPin size={14} color={active ? "#fff" : "#555"} strokeWidth={2.4} />
+                )}
+                {t.key === "online" && <View style={styles.fLiveDot} />}
+                <Text style={[styles.fTabText, active && styles.fTabTextActive]}>
+                  {t.label}
+                </Text>
+                <View style={[styles.fTabCount, active && styles.fTabCountActive]}>
+                  <Text style={[styles.fTabCountText, active && { color: "#fff" }]}>
+                    {t.count}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {friendRequests.length > 0 && (
+          <>
+            <View style={styles.fSectionRow}>
+              <Text style={styles.fSectionTitle}>Requests</Text>
+              <View style={[styles.tabCountBadge, styles.tabCountBadgeAmber]}>
+                <Text style={[styles.tabCountBadgeText, styles.tabCountBadgeTextAmber]}>
+                  {friendRequests.length}
+                </Text>
+              </View>
+            </View>
+            {friendRequests.map((req) => (
+              <View key={req.uid} style={styles.requestCard}>
+                <View style={{ marginRight: 11 }}>{avatar(req.uid, req.name, 42)}</View>
+                <View style={styles.friendInfo}>
+                  <Text style={styles.friendName}>{req.name}</Text>
+                  <Text style={styles.friendEmail}>{req.username || req.email}</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.acceptBtn}
+                  onPress={() =>
+                    handleAcceptRequest(req.uid, req.name, req.username || req.email || "")
+                  }
+                >
+                  <Check size={15} color="#fff" strokeWidth={2.6} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.declineBtn}
+                  onPress={() => handleDeclineRequest(req.uid)}
+                >
+                  <X size={15} color="#888" strokeWidth={2.6} />
+                </TouchableOpacity>
+              </View>
+            ))}
+          </>
+        )}
+
+        {friendsFilter === "all" && nearbyList.length > 0 && (
+          <>
+            <View style={styles.fSectionRow}>
+              <Text style={styles.fSectionTitle}>Friends Nearby</Text>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ marginBottom: 16 }}
+              keyboardShouldPersistTaps="handled"
+            >
+              {nearbyList.map((f) => (
+                <TouchableOpacity
+                  key={`nb-${f.uid}`}
+                  style={styles.fNearbyCard}
+                  onPress={() => locateFriend(f)}
+                  activeOpacity={0.8}
+                >
+                  <View>
+                    {avatar(f.uid, f.name, 56)}
+                    <View style={styles.fOnlineBadge} />
+                  </View>
+                  <Text style={styles.fNearbyName} numberOfLines={1}>
+                    {(f.name || "").split(" ")[0]}
+                  </Text>
+                  <Text style={styles.fNearbyDist}>{Math.round(f.dist)} m away</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </>
+        )}
+
+        <View style={styles.fSectionRow}>
+          <Text style={styles.fSectionTitle}>My Friends</Text>
+          <View style={styles.tabCountBadge}>
+            <Text style={styles.tabCountBadgeText}>{list.length}</Text>
+          </View>
+        </View>
+
+        {!friendsLoaded ? (
+          <TabSkeleton rows={3} />
+        ) : list.length === 0 ? (
+          <Text style={styles.emptyText}>
+            {friends.length === 0
+              ? "No friends yet. Tap Add Friend below!"
+              : friendsFilter === "nearby"
+                ? "No friends within 800m right now."
+                : "No friends online right now."}
+          </Text>
+        ) : (
+          list.map((f) => (
+            <TouchableOpacity
+              key={f.uid}
+              style={styles.fRow}
+              activeOpacity={0.7}
+              onPress={() => setChatWith(f)}
+              onLongPress={() => handleRemoveFriend(f.uid, f.name)}
+            >
+              <View style={{ marginRight: 12 }}>
+                {avatar(f.uid, f.name, 46)}
+                {f.online && <View style={styles.fOnlineBadge} />}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.fRowName} numberOfLines={1}>
+                  {f.name}
+                </Text>
+                <Text style={styles.fRowSub} numberOfLines={1}>
+                  {f.online
+                    ? "Online now"
+                    : f.loc
+                      ? formatLastSeen(f.loc.updatedAt)
+                      : "Location hidden"}
+                  {f.loc && f.dist !== null ? ` · ${formatFriendDistance(f.dist)}` : ""}
+                </Text>
+              </View>
+              <TouchableOpacity style={styles.fCircleBtn} onPress={() => setChatWith(f)}>
+                <MessageCircle size={17} color="#1a5c38" strokeWidth={2.4} />
+              </TouchableOpacity>
+              {f.loc && (
+                <TouchableOpacity style={styles.fCircleBtn} onPress={() => locateFriend(f)}>
+                  <Navigation size={17} color="#1a5c38" strokeWidth={2.4} />
+                </TouchableOpacity>
+              )}
+            </TouchableOpacity>
+          ))
+        )}
+
+        <View style={styles.fBanner}>
+          <View style={styles.fBannerRow}>
+            <UserPlus size={22} color="#1a5c38" strokeWidth={2.2} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.fBannerTitle}>Find Friends on Campus</Text>
+              <Text style={styles.fBannerSub}>Connect with classmates.</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.fBannerBtn}
+              onPress={() => setShowAddFriend((v) => !v)}
+            >
+              <Text style={styles.fBannerBtnText}>{showAddFriend ? "Close" : "+ Add"}</Text>
+            </TouchableOpacity>
+          </View>
+
+          {showAddFriend && (
+            <>
+              <View style={[styles.addFriendCard, { marginTop: 12, marginBottom: 8 }]}>
+                <View style={styles.addFriendRow}>
+                  <TextInput
+                    style={styles.addFriendInput}
+                    placeholder="Type a name or username…"
+                    placeholderTextColor="#999"
+                    value={friendUsername}
+                    onChangeText={handleUsernameChange}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  {friendUsername.length > 0 && (
+                    <TouchableOpacity
+                      style={styles.clearSearchBtn}
+                      onPress={() => {
+                        setFriendUsername("");
+                        setUserSuggestions([]);
+                      }}
+                    >
+                      <X size={14} color="#999" strokeWidth={2.4} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+              {userSuggestions.length > 0 && (
+                <View style={styles.suggestionsBox}>
+                  {userSuggestions.map((s) => (
+                    <TouchableOpacity
+                      key={s.uid}
+                      style={styles.suggestionRow}
+                      onPress={() => handleSendRequest(s.uid, s.displayName, s.username)}
+                      disabled={addingFriend}
+                    >
+                      <View style={{ marginRight: 10 }}>
+                        {avatar(s.uid, s.displayName, 36)}
+                      </View>
+                      <View style={styles.suggestionInfo}>
+                        <Text style={styles.suggestionName}>{s.displayName}</Text>
+                        {s.username ? (
+                          <Text style={styles.suggestionSub}>@{s.username}</Text>
+                        ) : null}
+                      </View>
+                      <View style={styles.sendRequestBtn}>
+                        {addingFriend ? (
+                          <ActivityIndicator color="#fff" size="small" />
+                        ) : (
+                          <Text style={styles.sendRequestText}>Add +</Text>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+              {friendUsername.length >= 2 && userSuggestions.length === 0 && (
+                <Text style={styles.noResultsText}>No users found for "{friendUsername}"</Text>
+              )}
+            </>
+          )}
+        </View>
+      </View>
+    );
+  }
+
+  function renderFriendsTabOld() {
     return (
       <ScrollView
         style={styles.friendsScroll}
@@ -3387,6 +3805,13 @@ export default function HomeScreen() {
               bottomSheetTall && {
                 maxHeight: Math.min(520, SCREEN_HEIGHT - keyboardHeight - 140),
               },
+              activeTab === "friends" &&
+                !directions && {
+                  height: friendsExpanded
+                    ? SCREEN_HEIGHT - keyboardHeight - (Platform.OS === "ios" ? 54 : 32)
+                    : Math.round(SCREEN_HEIGHT * 0.55),
+                  maxHeight: SCREEN_HEIGHT,
+                },
             ]}
           >
             <ScrollView
@@ -3418,6 +3843,11 @@ export default function HomeScreen() {
                       activeTab === tab && styles.navItemActive,
                     ]}
                     onPress={() => {
+                                           if (tab === "friends" && activeTab === "friends") {
+                        toggleFriendsSheet(!friendsExpanded);
+                        return;
+                      }
+                      setFriendsExpanded(false);
                       setActiveTab(tab);
                       if (tab === "buildings") {
                         mapRef.current?.animateToRegion(
@@ -3495,6 +3925,111 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+
+  // ── Friends (redesign) ──
+  fHandleZone: { alignItems: "center", paddingVertical: 10, marginTop: -8 },
+  fHandle: { width: 40, height: 5, borderRadius: 3, backgroundColor: "#d5d9d7" },
+  fHeaderRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 14 },
+  fHeaderIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "#1a5c38",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  fTitle: { fontSize: 22, fontWeight: "800", color: "#111" },
+  fSubtitle: { fontSize: 12, color: "#777", marginTop: 1 },
+  fShareLabel: { fontSize: 10, fontWeight: "700", color: "#4a8c63", marginTop: -2 },
+  fTabs: {
+    flexDirection: "row",
+    backgroundColor: "#f1f5f3",
+    borderRadius: 24,
+    padding: 4,
+    marginBottom: 16,
+  },
+  fTab: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    paddingVertical: 9,
+    borderRadius: 20,
+  },
+  fTabActive: { backgroundColor: "#1a5c38" },
+  fTabText: { fontSize: 12, fontWeight: "700", color: "#555" },
+  fTabTextActive: { color: "#fff" },
+  fTabCount: {
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 5,
+    backgroundColor: "#dfe9e3",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  fTabCountActive: { backgroundColor: "rgba(255,255,255,0.25)" },
+  fTabCountText: { fontSize: 10, fontWeight: "700", color: "#1a5c38" },
+  fLiveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#2fae60" },
+  fSectionRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
+  fSectionTitle: { fontSize: 16, fontWeight: "800", color: "#111" },
+  fNearbyCard: {
+    width: 104,
+    alignItems: "center",
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#eef0ef",
+    paddingVertical: 12,
+    marginRight: 10,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 1,
+  },
+  fNearbyName: { fontSize: 13, fontWeight: "700", color: "#111", marginTop: 8 },
+  fNearbyDist: { fontSize: 11, color: "#777", marginTop: 2 },
+  fOnlineBadge: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 13,
+    height: 13,
+    borderRadius: 7,
+    backgroundColor: "#2fae60",
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
+  fRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 11,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+  },
+  fRowName: { fontSize: 15, fontWeight: "700", color: "#111" },
+  fRowSub: { fontSize: 12, color: "#888", marginTop: 3 },
+  fCircleBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "#e8f5ee",
+    justifyContent: "center",
+    alignItems: "center",
+    marginLeft: 8,
+  },
+  fBanner: { backgroundColor: "#f0f7f3", borderRadius: 16, padding: 14, marginTop: 14, marginBottom: 8 },
+  fBannerRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  fBannerTitle: { fontSize: 14, fontWeight: "800", color: "#111" },
+  fBannerSub: { fontSize: 12, color: "#666", marginTop: 2 },
+  fBannerBtn: {
+    backgroundColor: "#1a5c38",
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  fBannerBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
   map: { flex: 1 },
 
   topBar: {
