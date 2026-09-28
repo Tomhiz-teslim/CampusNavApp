@@ -30,6 +30,7 @@ import {
   Phone,
   Plus,
   Satellite,
+  ImagePlus,
   Save,
   Search,
   Settings,
@@ -641,6 +642,7 @@ interface EventDoc {
   latitude?: number;
   longitude?: number;
   dateTimestamp?: number | null;
+  imageBase64?: string;
 }
 interface UserDoc {
   id: string;
@@ -714,6 +716,7 @@ function AdminPanel() {
     longitude: "",
   });
   const [eventError, setEventError] = useState("");
+  const [eventImage, setEventImage] = useState<string>("");
   const [savingEvent, setSavingEvent] = useState(false);
   const [eventCoordMode, setEventCoordMode] = useState<CoordMode>("search");
   const [locationSearch, setLocationSearch] = useState("");
@@ -981,8 +984,27 @@ function AdminPanel() {
   }, [locationSearch, allSearchableLocations]);
 
   // ── Event modal ──
+  async function pickEventImage() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      setEventError("Please allow photo library access to upload an event image.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [16, 9],
+      quality: 0.4,
+      base64: true,
+    });
+    if (result.canceled || !result.assets?.[0]?.base64) return;
+    setEventError("");
+    setEventImage(result.assets[0].base64);
+  }
+
   function openAddEvent() {
     setEditingEvent(null);
+    setEventImage("");
     setEventForm({
       name: "",
       description: "",
@@ -1000,6 +1022,7 @@ function AdminPanel() {
   }
   function openEditEvent(ev: EventDoc) {
     setEditingEvent(ev);
+    setEventImage(ev.imageBase64 ?? "");
     setEventForm({
       name: ev.name ?? "",
       description: ev.description ?? "",
@@ -1044,6 +1067,7 @@ function AdminPanel() {
       latitude: eventForm.latitude ? parseFloat(eventForm.latitude) : null,
       longitude: eventForm.longitude ? parseFloat(eventForm.longitude) : null,
       dateTimestamp,
+      imageBase64: eventImage || null,
       updatedAt: Date.now(),
     };
     try {
@@ -1552,6 +1576,36 @@ function AdminPanel() {
             contentContainerStyle={{ paddingBottom: 40 }}
           >
             <ErrorBanner message={eventError} />
+
+            <Text style={styles.fieldLabel}>Event Image</Text>
+            <TouchableOpacity
+              style={styles.imagePickerBox}
+              onPress={pickEventImage}
+              activeOpacity={0.8}
+            >
+              {eventImage ? (
+                <Image
+                  source={{ uri: `data:image/jpeg;base64,${eventImage}` }}
+                  style={styles.imagePickerPreview}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={styles.imagePickerEmpty}>
+                  <ImagePlus size={28} color="#1a5c38" strokeWidth={2} />
+                  <Text style={styles.imagePickerText}>Tap to upload event poster</Text>
+                  <Text style={styles.imagePickerSub}>16:9 works best</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            {eventImage ? (
+              <TouchableOpacity
+                style={styles.imageRemoveBtn}
+                onPress={() => setEventImage("")}
+              >
+                <Trash2 size={13} color="#fff" strokeWidth={2.4} />
+                <Text style={styles.actionBtnText}>Remove image</Text>
+              </TouchableOpacity>
+            ) : null}
 
             <Text style={styles.fieldLabel}>Event Name *</Text>
             <TextInput
@@ -2337,12 +2391,7 @@ function UserAccount() {
       sub: "Add a new campus spot to the map",
       route: "/submit-location",
     },
-    {
-      Icon: Calendar,
-      label: "Events",
-      sub: "Browse upcoming campus events",
-      route: "/events",
-    },
+
     {
       Icon: Utensils,
       label: "Find a Cafeteria",
@@ -3016,6 +3065,34 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   fieldTextarea: { minHeight: 80, textAlignVertical: "top" },
+  imagePickerBox: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#e0e0e0",
+    borderStyle: "dashed",
+    height: 170,
+    overflow: "hidden",
+    marginBottom: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  imagePickerPreview: { width: "100%", height: "100%" },
+  imagePickerEmpty: { alignItems: "center", gap: 6 },
+  imagePickerText: { fontSize: 13, fontWeight: "700", color: "#1a5c38" },
+  imagePickerSub: { fontSize: 11, color: "#aaa" },
+  imageRemoveBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 5,
+    backgroundColor: "#cc2222",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    marginTop: -4,
+    marginBottom: 12,
+  },
   fieldHint: {
     fontSize: 11,
     color: "#aaa",

@@ -332,6 +332,9 @@ export default function HomeScreen() {
   const [chatWith, setChatWith] = useState<any>(null);
 
    const friendsExpandedRef = useRef(false);
+  const [eventsExpanded, setEventsExpanded] = useState(false);
+  const eventsExpandedRef = useRef(false);
+  const [eventFilter, setEventFilter] = useState("all");
   const activeTabRef = useRef("home");
   useEffect(() => {
     activeTabRef.current = activeTab;
@@ -340,6 +343,8 @@ export default function HomeScreen() {
   const closeTab = useCallback(() => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     friendsExpandedRef.current = false;
+    eventsExpandedRef.current = false;
+    setEventsExpanded(false);
     setFriendsExpanded(false);
     setActiveTab("home");
   }, []);
@@ -354,6 +359,40 @@ export default function HomeScreen() {
     setFriendsExpanded(expand);
   }, []);
 
+  const toggleEventsSheet = useCallback((expand: boolean) => {
+    if (eventsExpandedRef.current === expand) return;
+    eventsExpandedRef.current = expand;
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setEventsExpanded(expand);
+  }, []);
+
+  const sheetScrollYRef = useRef(0);
+  const placesScrollYRef = useRef(0);
+
+  const sheetBodyPan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponderCapture: (_, g) => {
+        const tab = activeTabRef.current;
+        if (tab === "home") return false;
+        if (g.dy < 12 || Math.abs(g.dy) < Math.abs(g.dx) * 1.5) return false;
+        if (sheetScrollYRef.current > 2) return false;
+        if (tab === "buildings" && placesScrollYRef.current > 2) return false;
+        return true;
+      },
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderRelease: (_, g) => {
+        if (g.dy < 40) return;
+        const tab = activeTabRef.current;
+        if (tab === "friends" && friendsExpandedRef.current)
+          toggleFriendsSheet(false);
+        else if (tab === "events" && eventsExpandedRef.current)
+          toggleEventsSheet(false);
+        else if (tab !== "home") closeTab();
+      },
+    }),
+  ).current;
+
   const sheetPan = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
@@ -361,12 +400,15 @@ export default function HomeScreen() {
         Math.abs(g.dy) > 8 && Math.abs(g.dy) > Math.abs(g.dx),
       onPanResponderRelease: (_, g) => {
                if (g.dy < -30) {
-          if (activeTabRef.current === "friends") toggleFriendsSheet(true); // swipe up → full
+          if (activeTabRef.current === "friends") toggleFriendsSheet(true);
+          else if (activeTabRef.current === "events") toggleEventsSheet(true); // swipe up → full
         }
               else if (g.dy > 30) {
           // full → half → closed (Places / Friends / Events)
           if (activeTabRef.current === "friends" && friendsExpandedRef.current)
             toggleFriendsSheet(false);
+          else if (activeTabRef.current === "events" && eventsExpandedRef.current)
+            toggleEventsSheet(false);
           else if (activeTabRef.current !== "home") closeTab();
         }
       },
@@ -2890,7 +2932,220 @@ export default function HomeScreen() {
   }
 
   // ── Events tab ─────────────────────────────────────────────────────────────
+  // ── Events tab (redesigned) ────────────────────────────────────────────────
   function renderEventsTab() {
+    const now = Date.now();
+    const DAY = 86400000;
+    const tsOf = (e: any): number => {
+      if (e.dateTimestamp) return e.dateTimestamp as number;
+      const p = Date.parse(e.date);
+      return isNaN(p) ? 0 : p;
+    };
+    const locOf = (e: any) => e.locationName || e.location || "";
+    const imgOf = (e: any) =>
+      e.imageBase64 ? `data:image/jpeg;base64,${e.imageBase64}` : null;
+
+    const cats = Array.from(
+      new Set(events.map((e) => e.category).filter(Boolean)),
+    ) as string[];
+    const chips = [
+      { key: "all", label: "All Events", count: events.length },
+      ...cats.map((c) => ({
+        key: c,
+        label: c,
+        count: events.filter((e) => e.category === c).length,
+      })),
+    ];
+
+    const filtered = events.filter(
+      (e) => eventFilter === "all" || e.category === eventFilter,
+    );
+    const upcoming = filtered
+      .filter((e) => tsOf(e) >= now - DAY)
+      .sort((a, b) => tsOf(a) - tsOf(b));
+    const past = filtered
+      .filter((e) => tsOf(e) < now - DAY)
+      .sort((a, b) => tsOf(b) - tsOf(a));
+    const list = [...upcoming, ...past];
+    const featured = upcoming.find((e) => !!e.imageBase64) ?? upcoming[0] ?? null;
+
+    function openEvent(ev: any) {
+      if (ev.latitude && ev.longitude) {
+        mapRef.current?.animateToRegion(
+          {
+            latitude: ev.latitude,
+            longitude: ev.longitude,
+            latitudeDelta: 0.003,
+            longitudeDelta: 0.003,
+          },
+          600,
+        );
+      }
+      setSelectedEvent(ev);
+      eventsExpandedRef.current = false;
+      setEventsExpanded(false);
+      setActiveTab("home");
+    }
+
+    function thumb(ev: any, style: any) {
+      const uri = imgOf(ev);
+      return uri ? (
+        <Image source={{ uri }} style={style} resizeMode="cover" />
+      ) : (
+        <View style={[style, styles.evThumbPlaceholder]}>
+          <Calendar size={26} color="#d97706" strokeWidth={2.2} />
+        </View>
+      );
+    }
+
+    return (
+      <View>
+        <View {...sheetPan.panHandlers} style={styles.evHeaderRow}>
+          <View style={styles.evHeaderIcon}>
+            <Calendar size={20} color="#fff" strokeWidth={2.4} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.evTitle}>Events</Text>
+            <Text style={styles.evSubtitle}>
+              Discover events, workshops and activities around campus.
+            </Text>
+          </View>
+        </View>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ marginBottom: 16 }}
+          keyboardShouldPersistTaps="handled"
+        >
+          {chips.map((c) => {
+            const active = eventFilter === c.key;
+            return (
+              <TouchableOpacity
+                key={c.key}
+                style={[styles.evChip, active && styles.evChipActive]}
+                onPress={() => setEventFilter(c.key)}
+              >
+                <Text style={[styles.evChipText, active && styles.evChipTextActive]}>
+                  {c.label}
+                </Text>
+                <View style={[styles.evChipCount, active && styles.evChipCountActive]}>
+                  <Text style={[styles.evChipCountText, active && { color: "#fff" }]}>
+                    {c.count}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        {!eventsLoaded ? (
+          <TabSkeleton rows={3} />
+        ) : events.length === 0 ? (
+          <Text style={styles.emptyText}>No events yet. Check back soon!</Text>
+        ) : (
+          <>
+            {featured && (
+              <>
+                <View style={styles.fSectionRow}>
+                  <Text style={styles.fSectionTitle}>Featured Event</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.evFeatured}
+                  activeOpacity={0.85}
+                  onPress={() => openEvent(featured)}
+                >
+                  {thumb(featured, styles.evFeaturedImg)}
+                  <View style={styles.evFeaturedBody}>
+                    <View style={styles.evBadge}>
+                      <Text style={styles.evBadgeText}>Featured</Text>
+                    </View>
+                    <Text style={styles.evFeatTitle} numberOfLines={2}>
+                      {featured.name}
+                    </Text>
+                    <View style={styles.evMetaRow}>
+                      <Calendar size={13} color="#1a5c38" strokeWidth={2.2} />
+                      <Text style={styles.evMetaText} numberOfLines={1}>
+                        {featured.date}
+                        {featured.time ? ` · ${featured.time}` : ""}
+                      </Text>
+                    </View>
+                    {locOf(featured) ? (
+                      <View style={styles.evMetaRow}>
+                        <MapPin size={13} color="#1a5c38" strokeWidth={2.2} />
+                        <Text style={styles.evMetaText} numberOfLines={1}>
+                          {locOf(featured)}
+                        </Text>
+                      </View>
+                    ) : null}
+                    {featured.description ? (
+                      <Text style={styles.evDesc} numberOfLines={2}>
+                        {featured.description}
+                      </Text>
+                    ) : null}
+                    <View style={styles.evViewBtn}>
+                      <Text style={styles.evViewBtnText}>View Details</Text>
+                      <ChevronRight size={14} color="#fff" strokeWidth={2.6} />
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              </>
+            )}
+
+            <View style={styles.fSectionRow}>
+              <Text style={styles.fSectionTitle}>Upcoming Events</Text>
+              <View style={styles.tabCountBadge}>
+                <Text style={styles.tabCountBadgeText}>{list.length}</Text>
+              </View>
+            </View>
+
+            {list.length === 0 ? (
+              <Text style={styles.emptyText}>No events in this category.</Text>
+            ) : (
+              list.map((ev) => (
+                <TouchableOpacity
+                  key={ev.id}
+                  style={styles.evRow}
+                  activeOpacity={0.8}
+                  onPress={() => openEvent(ev)}
+                >
+                  {thumb(ev, styles.evThumb)}
+                  <View style={styles.evRowBody}>
+                    <Text style={styles.evRowTitle} numberOfLines={1}>
+                      {ev.name}
+                    </Text>
+                    {ev.category ? (
+                      <View style={styles.evPill}>
+                        <Text style={styles.evPillText}>{ev.category}</Text>
+                      </View>
+                    ) : null}
+                    <View style={styles.evMetaRow}>
+                      <Calendar size={12} color="#888" strokeWidth={2.2} />
+                      <Text style={styles.evMetaText} numberOfLines={1}>
+                        {ev.date}
+                        {ev.time ? ` · ${ev.time}` : ""}
+                      </Text>
+                    </View>
+                    {locOf(ev) ? (
+                      <View style={styles.evMetaRow}>
+                        <MapPin size={12} color="#888" strokeWidth={2.2} />
+                        <Text style={styles.evMetaText} numberOfLines={1}>
+                          {locOf(ev)}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <ChevronRight size={18} color="#ccc" strokeWidth={2} />
+                </TouchableOpacity>
+              ))
+            )}
+          </>
+        )}
+      </View>
+    );
+  }
+
+  function renderEventsTabOld() {
     return (
       <>
         <View style={styles.tabTitleRow}>
@@ -2904,6 +3159,10 @@ export default function HomeScreen() {
         </View>
         <ScrollView
           style={styles.buildingsList}
+            onScroll={(e) => {
+              placesScrollYRef.current = e.nativeEvent.contentOffset.y;
+            }}
+            scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
@@ -3815,7 +4074,7 @@ export default function HomeScreen() {
                 name: selectedEvent.name,
                 latitude: selectedEvent.latitude,
                 longitude: selectedEvent.longitude,
-                description: `📍 ${selectedEvent.locationName}`,
+                description: `📍 ${selectedEvent.locationName || selectedEvent.location || ""}`,
                 icon: selectedEvent.icon || "📌",
               });
               setSelectedEvent(null);
@@ -3834,7 +4093,7 @@ export default function HomeScreen() {
 
       {/* ── BOTTOM SHEET ── */}
       {!navigating && (
-        <View style={[styles.keyboardAvoid, { bottom: keyboardHeight }]}>
+        <View {...sheetBodyPan.panHandlers} style={[styles.keyboardAvoid, { bottom: keyboardHeight }]}>
           <View
             style={[
               styles.bottomSheet,
@@ -3844,6 +4103,13 @@ export default function HomeScreen() {
               activeTab === "friends" &&
                 !directions && {
                   height: friendsExpanded
+                    ? SCREEN_HEIGHT - keyboardHeight - (Platform.OS === "ios" ? 54 : 32)
+                    : Math.round(SCREEN_HEIGHT * 0.55),
+                  maxHeight: SCREEN_HEIGHT,
+                },
+              activeTab === "events" &&
+                !directions && {
+                  height: eventsExpanded
                     ? SCREEN_HEIGHT - keyboardHeight - (Platform.OS === "ios" ? 54 : 32)
                     : Math.round(SCREEN_HEIGHT * 0.55),
                   maxHeight: SCREEN_HEIGHT,
@@ -3858,12 +4124,20 @@ export default function HomeScreen() {
                 flexGrow: 1,
                 // keeps the half sheet scrollable so a swipe always registers
                 paddingBottom:
-                  activeTab === "friends" && !friendsExpanded
+                  (activeTab === "friends" && !friendsExpanded) ||
+                  (activeTab === "events" && !eventsExpanded)
                     ? Math.round(SCREEN_HEIGHT * 0.3)
                     : 0,
               }}
               scrollEventThrottle={16}
               onScroll={(e) => {
+                sheetScrollYRef.current = e.nativeEvent.contentOffset.y;
+                if (
+                  activeTab === "events" &&
+                  !eventsExpandedRef.current &&
+                  e.nativeEvent.contentOffset.y > 12
+                )
+                  toggleEventsSheet(true);
                 if (
                   activeTab === "friends" &&
                   !friendsExpandedRef.current &&
@@ -3872,6 +4146,12 @@ export default function HomeScreen() {
                   toggleFriendsSheet(true);
               }}
               onScrollEndDrag={(e) => {
+                if (
+                  activeTab === "events" &&
+                  eventsExpandedRef.current &&
+                  e.nativeEvent.contentOffset.y < -40
+                )
+                  toggleEventsSheet(false);
                 if (
                   activeTab === "friends" &&
                   friendsExpandedRef.current &&
@@ -3903,7 +4183,15 @@ export default function HomeScreen() {
                       activeTab === tab && styles.navItemActive,
                     ]}
                     onPress={() => {
-                                           if (tab === "friends" && activeTab === "friends") {
+                                           if (tab !== "events") {
+                        eventsExpandedRef.current = false;
+                        setEventsExpanded(false);
+                      }
+                      if (tab === "events" && activeTab === "events") {
+                        toggleEventsSheet(!eventsExpanded);
+                        return;
+                      }
+                      if (tab === "friends" && activeTab === "friends") {
                         toggleFriendsSheet(!friendsExpanded);
                         return;
                       }
@@ -3995,6 +4283,106 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+
+  // ── Events (redesign) ──
+  evHeaderRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 14 },
+  evHeaderIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "#1a5c38",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  evTitle: { fontSize: 22, fontWeight: "800", color: "#111" },
+  evSubtitle: { fontSize: 12, color: "#777", marginTop: 1 },
+  evChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 22,
+    backgroundColor: "#f1f5f3",
+    marginRight: 8,
+  },
+  evChipActive: { backgroundColor: "#1a5c38" },
+  evChipText: { fontSize: 12, fontWeight: "700", color: "#555" },
+  evChipTextActive: { color: "#fff" },
+  evChipCount: {
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 5,
+    backgroundColor: "#dfe9e3",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  evChipCountActive: { backgroundColor: "rgba(255,255,255,0.25)" },
+  evChipCountText: { fontSize: 10, fontWeight: "700", color: "#1a5c38" },
+  evFeatured: {
+    flexDirection: "row",
+    backgroundColor: "#f0f7f3",
+    borderRadius: 18,
+    overflow: "hidden",
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: "#e0ede8",
+  },
+  evFeaturedImg: { width: 128, minHeight: 170, alignSelf: "stretch" },
+  evFeaturedBody: { flex: 1, padding: 12 },
+  evBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: "#1a5c38",
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginBottom: 6,
+  },
+  evBadgeText: { color: "#fff", fontSize: 10, fontWeight: "800" },
+  evFeatTitle: { fontSize: 16, fontWeight: "800", color: "#111", marginBottom: 6 },
+  evMetaRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 3 },
+  evMetaText: { fontSize: 12, color: "#555", flex: 1 },
+  evDesc: { fontSize: 12, color: "#777", marginTop: 6, lineHeight: 17 },
+  evViewBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 4,
+    backgroundColor: "#1a5c38",
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginTop: 10,
+  },
+  evViewBtnText: { color: "#fff", fontSize: 12, fontWeight: "700" },
+  evRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#eef0ef",
+    padding: 10,
+    marginBottom: 10,
+  },
+  evThumb: { width: 76, height: 76, borderRadius: 12, marginRight: 12 },
+  evThumbPlaceholder: {
+    backgroundColor: "#fef3c7",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  evRowBody: { flex: 1 },
+  evRowTitle: { fontSize: 14, fontWeight: "800", color: "#111" },
+  evPill: {
+    alignSelf: "flex-start",
+    backgroundColor: "#e8f5ee",
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginTop: 4,
+  },
+  evPillText: { fontSize: 10, fontWeight: "700", color: "#1a5c38" },
 
   // ── Friends (redesign) ──
   fHandleZone: { alignItems: "center", paddingVertical: 10, marginTop: -8 },
