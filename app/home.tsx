@@ -331,7 +331,18 @@ export default function HomeScreen() {
   const [showAddFriend, setShowAddFriend] = useState(false);
   const [chatWith, setChatWith] = useState<any>(null);
 
-  const friendsExpandedRef = useRef(false);
+   const friendsExpandedRef = useRef(false);
+  const activeTabRef = useRef("home");
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
+
+  const closeTab = useCallback(() => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    friendsExpandedRef.current = false;
+    setFriendsExpanded(false);
+    setActiveTab("home");
+  }, []);
   useEffect(() => {
     friendsExpandedRef.current = friendsExpanded;
   }, [friendsExpanded]);
@@ -349,8 +360,15 @@ export default function HomeScreen() {
       onMoveShouldSetPanResponder: (_, g) =>
         Math.abs(g.dy) > 8 && Math.abs(g.dy) > Math.abs(g.dx),
       onPanResponderRelease: (_, g) => {
-        if (g.dy < -30) toggleFriendsSheet(true); // swipe up → full screen
-        else if (g.dy > 30) toggleFriendsSheet(false); // swipe down → half
+               if (g.dy < -30) {
+          if (activeTabRef.current === "friends") toggleFriendsSheet(true); // swipe up → full
+        }
+              else if (g.dy > 30) {
+          // full → half → closed (Places / Friends / Events)
+          if (activeTabRef.current === "friends" && friendsExpandedRef.current)
+            toggleFriendsSheet(false);
+          else if (activeTabRef.current !== "home") closeTab();
+        }
       },
     }),
   ).current;
@@ -2116,7 +2134,15 @@ export default function HomeScreen() {
   }
 
   // ── Friends tab ────────────────────────────────────────────────────────────
-   function formatLastSeen(ts?: number) {
+   function renderSheetHandle() {
+    return (
+      <View {...sheetPan.panHandlers} style={styles.fHandleZone}>
+        <View style={styles.fHandle} />
+      </View>
+    );
+  }
+
+  function formatLastSeen(ts?: number) {
     if (!ts) return "Location hidden";
     const mins = Math.max(1, Math.round((Date.now() - ts) / 60000));
     if (mins < 60) return `Last seen ${mins}m ago`;
@@ -3315,6 +3341,7 @@ export default function HomeScreen() {
 
         {/* BUILDINGS TAB */}
         <View style={{ display: activeTab === "buildings" ? "flex" : "none" }}>
+          {renderSheetHandle()}
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -3445,6 +3472,7 @@ export default function HomeScreen() {
 
         {/* EVENTS TAB */}
         <View style={{ display: activeTab === "events" ? "flex" : "none" }}>
+          {renderSheetHandle()}
           {renderEventsTab()}
         </View>
       </>
