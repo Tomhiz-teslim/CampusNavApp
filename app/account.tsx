@@ -743,6 +743,7 @@ function AdminPanel() {
   const [locGpsLoading, setLocGpsLoading] = useState(false);
 
   const EVENT_CATEGORIES = [
+    "Clubs & Societies",
     "Academic",
     "Social",
     "Sports",
@@ -1039,6 +1040,43 @@ function AdminPanel() {
     setShowEventModal(true);
   }
 
+  async function notifyUsersOfNewEvent(name: string, date: string, place: string) {
+    try {
+      const me = auth.currentUser?.uid;
+      const tokens = Array.from(
+        new Set(
+          users
+            .filter((u) => u.id !== me)
+            .map((u) => (u as any).expoPushToken as string | undefined)
+            .filter(
+              (t): t is string =>
+                !!t && /^Expo(nent)?PushToken\[/.test(t),
+            ),
+        ),
+      );
+      for (let i = 0; i < tokens.length; i += 100) {
+        const batch = tokens.slice(i, i + 100).map((to) => ({
+          to,
+          sound: "default",
+          title: "New campus event 🎉",
+          body: `${name} · ${date}${place ? ` · ${place}` : ""}`,
+          data: { type: "event" },
+          channelId: "default",
+        }));
+        await fetch("https://exp.host/--/api/v2/push/send", {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(batch),
+        });
+      }
+    } catch (e) {
+      console.log("Event notification failed:", e);
+    }
+  }
+
   async function saveEvent() {
     setEventError("");
     if (!eventForm.name.trim()) {
@@ -1076,6 +1114,7 @@ function AdminPanel() {
       } else {
         payload.createdAt = Date.now();
         await set(push(ref(database, "events")), payload);
+        notifyUsersOfNewEvent(payload.name, payload.date, payload.location);
       }
       setShowEventModal(false);
     } catch (e: any) {

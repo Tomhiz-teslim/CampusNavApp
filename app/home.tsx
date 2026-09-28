@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import * as Haptics from "expo-haptics";
 import * as Location from "expo-location";
+import * as Notifications from "expo-notifications";
 import { router, useLocalSearchParams } from "expo-router";
 import * as Speech from "expo-speech";
 import { signOut } from "firebase/auth";
@@ -23,6 +24,13 @@ import {
   Home,
    Store,
     LocateFixed,
+  GraduationCap,
+  Music,
+  Trophy,
+  LayoutGrid,
+  Briefcase,
+  Heart,
+  Palette,
   MessageCircle,
   LogOut,
   MapPin,
@@ -199,6 +207,45 @@ const arGateStyles = StyleSheet.create({
   btnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
 });
 
+Notifications.setNotificationHandler({
+  handleNotification: async () =>
+    ({
+      shouldShowAlert: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }) as any,
+});
+
+async function registerForPushNotifications(uid: string) {
+  try {
+    if (Platform.OS === "android") {
+      await Notifications.setNotificationChannelAsync("default", {
+        name: "default",
+        importance: Notifications.AndroidImportance.MAX,
+      });
+    }
+    const existing = await Notifications.getPermissionsAsync();
+    let status = existing.status;
+    if (status !== "granted") {
+      status = (await Notifications.requestPermissionsAsync()).status;
+    }
+    if (status !== "granted") return;
+    const projectId =
+      Constants.expoConfig?.extra?.eas?.projectId ??
+      Constants.easConfig?.projectId;
+    const token = (
+      await Notifications.getExpoPushTokenAsync(
+        projectId ? { projectId } : undefined,
+      )
+    ).data;
+    await update(ref(database, `users/${uid}`), { expoPushToken: token });
+  } catch (e) {
+    console.log("Push registration failed:", e);
+  }
+}
+
 const REROUTE_THRESHOLD_M = 25;
 const ARRIVAL_THRESHOLD_M = 18;
 const STEP_ADVANCE_WALKING_M = 20;
@@ -335,6 +382,7 @@ export default function HomeScreen() {
   const [eventsExpanded, setEventsExpanded] = useState(false);
   const eventsExpandedRef = useRef(false);
   const [eventFilter, setEventFilter] = useState("all");
+  const [eventSearch, setEventSearch] = useState("");
   const activeTabRef = useRef("home");
   useEffect(() => {
     activeTabRef.current = activeTab;
@@ -2945,6 +2993,27 @@ export default function HomeScreen() {
     const imgOf = (e: any) =>
       e.imageBase64 ? `data:image/jpeg;base64,${e.imageBase64}` : null;
 
+    const q = eventSearch.trim().toLowerCase();
+    const matchesEventSearch = (e: any) =>
+      !q ||
+      [e.name, e.description, e.category, e.date, e.locationName, e.location].some(
+        (v) => typeof v === "string" && v.toLowerCase().includes(q),
+      );
+
+    const chipIcon = (key: string, active: boolean) => {
+      const p = { size: 14, color: active ? "#fff" : "#1a5c38", strokeWidth: 2.4 };
+      const k = key.toLowerCase();
+      if (key === "all") return <LayoutGrid {...p} />;
+      if (k.includes("club")) return <Users {...p} />;
+      if (k.includes("academic")) return <GraduationCap {...p} />;
+      if (k.includes("social")) return <Music {...p} />;
+      if (k.includes("sport")) return <Trophy {...p} />;
+      if (k.includes("career")) return <Briefcase {...p} />;
+      if (k.includes("health")) return <Heart {...p} />;
+      if (k.includes("cultur")) return <Palette {...p} />;
+      return <Calendar {...p} />;
+    };
+
     const cats = Array.from(
       new Set(events.map((e) => e.category).filter(Boolean)),
     ) as string[];
@@ -2958,7 +3027,9 @@ export default function HomeScreen() {
     ];
 
     const filtered = events.filter(
-      (e) => eventFilter === "all" || e.category === eventFilter,
+      (e) =>
+        (eventFilter === "all" || e.category === eventFilter) &&
+        matchesEventSearch(e),
     );
     const upcoming = filtered
       .filter((e) => tsOf(e) >= now - DAY)
@@ -3026,6 +3097,7 @@ export default function HomeScreen() {
                 style={[styles.evChip, active && styles.evChipActive]}
                 onPress={() => setEventFilter(c.key)}
               >
+                {chipIcon(c.key, active)}
                 <Text style={[styles.evChipText, active && styles.evChipTextActive]}>
                   {c.label}
                 </Text>
@@ -3038,6 +3110,28 @@ export default function HomeScreen() {
             );
           })}
         </ScrollView>
+
+        <View style={styles.evSearchBar}>
+          <Search size={16} color="#64748B" strokeWidth={2.2} />
+          <TextInput
+            style={styles.evSearchInput}
+            placeholder="Search events…"
+            placeholderTextColor="#999"
+            value={eventSearch}
+            onChangeText={setEventSearch}
+            onFocus={() => toggleEventsSheet(true)}
+            returnKeyType="search"
+            onSubmitEditing={() => Keyboard.dismiss()}
+          />
+          {eventSearch.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setEventSearch("")}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <X size={16} color="#64748B" strokeWidth={2.4} />
+            </TouchableOpacity>
+          )}
+        </View>
 
         {!eventsLoaded ? (
           <TabSkeleton rows={3} />
@@ -3100,7 +3194,11 @@ export default function HomeScreen() {
             </View>
 
             {list.length === 0 ? (
-              <Text style={styles.emptyText}>No events in this category.</Text>
+              <Text style={styles.emptyText}>
+                {eventSearch.trim()
+                  ? `No events match "${eventSearch.trim()}"`
+                  : "No events in this category."}
+              </Text>
             ) : (
               list.map((ev) => (
                 <TouchableOpacity
@@ -4120,7 +4218,12 @@ export default function HomeScreen() {
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="on-drag"
               showsVerticalScrollIndicator={false}
-                            contentContainerStyle={{
+                            style={
+                (activeTab === "friends" || activeTab === "events") && !directions
+                  ? { flex: 1 }
+                  : undefined
+              }
+              contentContainerStyle={{
                 flexGrow: 1,
                 // keeps the half sheet scrollable so a swipe always registers
                 paddingBottom:
@@ -4285,6 +4388,17 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
 
   // ── Events (redesign) ──
+  evSearchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#f1f5f3",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 16,
+  },
+  evSearchInput: { flex: 1, fontSize: 14, color: "#222", padding: 0 },
   evHeaderRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 14 },
   evHeaderIcon: {
     width: 42,
