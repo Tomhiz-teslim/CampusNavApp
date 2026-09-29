@@ -451,21 +451,29 @@ export default function HomeScreen() {
 
   const sheetScrollYRef = useRef(0);
   const placesScrollYRef = useRef(0);
+  const gestureStartedAtTopRef = useRef(false);
 
   const sheetBodyPan = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponderCapture: () => {
+        gestureStartedAtTopRef.current =
+          sheetScrollYRef.current <= 2 &&
+          !(activeTabRef.current === "buildings" && placesScrollYRef.current > 2);
+        return false;
+      },
       onMoveShouldSetPanResponderCapture: (_, g) => {
+        if (!gestureStartedAtTopRef.current) return false;
         const tab = activeTabRef.current;
         if (tab === "home") return false;
-        if (g.dy < 12 || Math.abs(g.dy) < Math.abs(g.dx) * 1.5) return false;
+        if (g.dy < 20 || Math.abs(g.dy) < Math.abs(g.dx) * 1.5) return false;
         if (sheetScrollYRef.current > 2) return false;
         if (tab === "buildings" && placesScrollYRef.current > 2) return false;
         return true;
       },
       onPanResponderTerminationRequest: () => false,
       onPanResponderRelease: (_, g) => {
-        if (g.dy < 40) return;
+        if (g.dy < 60) return;
         const tab = activeTabRef.current;
         if (tab === "friends" && friendsExpandedRef.current)
           toggleFriendsSheet(false);
@@ -3806,6 +3814,11 @@ export default function HomeScreen() {
           </View>
           <ScrollView
             style={styles.buildingsList}
+            nestedScrollEnabled
+            onScroll={(e) => {
+              placesScrollYRef.current = e.nativeEvent.contentOffset.y;
+            }}
+            scrollEventThrottle={16}
             showsVerticalScrollIndicator={false}
             keyboardDismissMode="on-drag"
             keyboardShouldPersistTaps="handled"
@@ -4237,7 +4250,7 @@ export default function HomeScreen() {
 
       {/* ── BOTTOM SHEET ── */}
       {!navigating && (
-        <View style={[styles.keyboardAvoid, { bottom: keyboardHeight }]}>
+        <View {...sheetBodyPan.panHandlers} style={[styles.keyboardAvoid, { bottom: keyboardHeight }]}>
           <Animated.View
             style={[
               styles.bottomSheet,
@@ -4272,6 +4285,32 @@ export default function HomeScreen() {
               scrollEventThrottle={16}
               onScroll={(e) => {
                 sheetScrollYRef.current = e.nativeEvent.contentOffset.y;
+                if (
+                  activeTab === "events" &&
+                  !eventsExpandedRef.current &&
+                  e.nativeEvent.contentOffset.y > 999999
+                )
+                  toggleEventsSheet(true);
+                if (
+                  activeTab === "friends" &&
+                  !friendsExpandedRef.current &&
+                  e.nativeEvent.contentOffset.y > 999999
+                )
+                  toggleFriendsSheet(true);
+              }}
+              onScrollEndDrag={(e) => {
+                if (
+                  activeTab === "events" &&
+                  eventsExpandedRef.current &&
+                  e.nativeEvent.contentOffset.y < -999999
+                )
+                  toggleEventsSheet(false);
+                if (
+                  activeTab === "friends" &&
+                  friendsExpandedRef.current &&
+                  e.nativeEvent.contentOffset.y < -40
+                )
+                  toggleFriendsSheet(false);
               }}
             >
               {renderBottomContent()}
@@ -4510,7 +4549,7 @@ const styles = StyleSheet.create({
   evPillText: { fontSize: 10, fontWeight: "700", color: "#1a5c38" },
 
   // ── Friends (redesign) ──
-  fHandleZone: { alignItems: "center", paddingVertical: 18, marginTop: -8 },
+  fHandleZone: { alignItems: "center", paddingVertical: 10, marginTop: -8 },
   fHandle: { width: 40, height: 5, borderRadius: 3, backgroundColor: "#d5d9d7" },
   fHeaderRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 14 },
   fHeaderIcon: {
@@ -4523,7 +4562,7 @@ const styles = StyleSheet.create({
   },
   fTitle: { fontSize: 22, fontWeight: "800", color: "#111" },
   fSubtitle: { fontSize: 12, color: "#777", marginTop: 1 },
-  fShareLabel: { fontSize: 10, fontWeight: "700", color: "#4a8c63", marginTop: 6 },
+  fShareLabel: { fontSize: 10, fontWeight: "700", color: "#4a8c63", marginTop: -2 },
   fTabs: {
     flexDirection: "row",
     backgroundColor: "#f1f5f3",
