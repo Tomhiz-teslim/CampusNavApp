@@ -52,7 +52,6 @@ import {
   Dimensions,
   Image,
   Keyboard,
-  LayoutAnimation,
   PanResponder,
   UIManager,
   Platform,
@@ -93,6 +92,12 @@ import {
 import { StyledModal, useStyledModal } from "./StyledModal";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+
+// Old LayoutAnimation calls now do nothing; the sheet uses its own animation
+const LayoutAnimation = {
+  configureNext: (_config?: any) => {},
+  Presets: { easeInEaseOut: null as any },
+};
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -265,6 +270,16 @@ const DEFAULT_VISIBILITY_RADIUS_M = 700;
 // Matches the centroid your category-chip handler already re-centers to.
 const FALLBACK_CAMPUS_CENTER = { latitude: 6.517, longitude: 3.393 };
 
+function isOnCampus(lat?: number, lng?: number): boolean {
+  if (typeof lat !== "number" || typeof lng !== "number") return false;
+  return (
+    lat > CAMPUS_BOUNDS.minLat &&
+    lat < CAMPUS_BOUNDS.maxLat &&
+    lng > CAMPUS_BOUNDS.minLng &&
+    lng < CAMPUS_BOUNDS.maxLng
+  );
+}
+
 // ── Tab skeleton loader ───────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -413,6 +428,26 @@ export default function HomeScreen() {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setEventsExpanded(expand);
   }, []);
+
+  const HALF_H = Math.round(SCREEN_HEIGHT * 0.55);
+  const sheetHeightAnim = useRef(new Animated.Value(HALF_H)).current;
+
+  useEffect(() => {
+    if (activeTab !== "friends" && activeTab !== "events") {
+      sheetHeightAnim.setValue(HALF_H);
+      return;
+    }
+    const expanded = activeTab === "friends" ? friendsExpanded : eventsExpanded;
+    const fullH =
+      SCREEN_HEIGHT - keyboardHeight - (Platform.OS === "ios" ? 54 : 32);
+    Animated.spring(sheetHeightAnim, {
+      toValue: expanded ? fullH : HALF_H,
+      useNativeDriver: false,
+      tension: 70,
+      friction: 14,
+      overshootClamping: true,
+    }).start();
+  }, [activeTab, friendsExpanded, eventsExpanded, keyboardHeight]);
 
   const sheetScrollYRef = useRef(0);
   const placesScrollYRef = useRef(0);
@@ -1575,6 +1610,13 @@ export default function HomeScreen() {
   }
 
   function handleSelectBuilding(b: any) {
+    if (!isOnCampus(b.latitude, b.longitude)) {
+      setSearch("");
+      setSearchFocused(false);
+      Keyboard.dismiss();
+      showAlert("Not in school", `${b.name} is not on the school campus.`, MapPin);
+      return;
+    }
     addRecentSearch(b);
     setSelected(b);
     setSearch("");
@@ -2299,6 +2341,10 @@ export default function HomeScreen() {
 
     async function locateFriend(f: any) {
       const loc = f.loc;
+      if (loc && !isOnCampus(loc.latitude, loc.longitude)) {
+        showAlert("Not in school", `${f.name} is not in school right now.`, MapPin);
+        return;
+      }
       if (!loc) return;
       const dest = {
         name: f.name,
@@ -4192,24 +4238,15 @@ export default function HomeScreen() {
       {/* ── BOTTOM SHEET ── */}
       {!navigating && (
         <View {...sheetBodyPan.panHandlers} style={[styles.keyboardAvoid, { bottom: keyboardHeight }]}>
-          <View
+          <Animated.View
             style={[
               styles.bottomSheet,
               bottomSheetTall && {
                 maxHeight: Math.min(520, SCREEN_HEIGHT - keyboardHeight - 140),
               },
-              activeTab === "friends" &&
+              (activeTab === "friends" || activeTab === "events") &&
                 !directions && {
-                  height: friendsExpanded
-                    ? SCREEN_HEIGHT - keyboardHeight - (Platform.OS === "ios" ? 54 : 32)
-                    : Math.round(SCREEN_HEIGHT * 0.55),
-                  maxHeight: SCREEN_HEIGHT,
-                },
-              activeTab === "events" &&
-                !directions && {
-                  height: eventsExpanded
-                    ? SCREEN_HEIGHT - keyboardHeight - (Platform.OS === "ios" ? 54 : 32)
-                    : Math.round(SCREEN_HEIGHT * 0.55),
+                  height: sheetHeightAnim as any,
                   maxHeight: SCREEN_HEIGHT,
                 },
             ]}
@@ -4291,11 +4328,11 @@ export default function HomeScreen() {
                         setEventsExpanded(false);
                       }
                       if (tab === "events" && activeTab === "events") {
-                        toggleEventsSheet(!eventsExpanded);
+                        closeTab();
                         return;
                       }
                       if (tab === "friends" && activeTab === "friends") {
-                        toggleFriendsSheet(!friendsExpanded);
+                        closeTab();
                         return;
                       }
                       setFriendsExpanded(false);
@@ -4346,7 +4383,7 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               </ScrollView>
             )}
-          </View>
+          </Animated.View>
         </View>
       )}
 
@@ -4978,6 +5015,8 @@ const styles = StyleSheet.create({
   },
 
   bottomNavScroll: {
+    flexGrow: 0,
+    flexShrink: 0,
     borderTopWidth: 1,
     borderTopColor: "#f0f0f0",
   },
