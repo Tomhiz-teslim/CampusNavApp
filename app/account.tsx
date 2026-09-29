@@ -701,6 +701,7 @@ function AdminPanel() {
   >("pending");
   const [events, setEvents] = useState<EventDoc[]>([]);
   const [users, setUsers] = useState<UserDoc[]>([]);
+  const [userSearch, setUserSearch] = useState("");
 
   // ── Event modal state ──
   const [showEventModal, setShowEventModal] = useState(false);
@@ -1244,6 +1245,21 @@ function AdminPanel() {
     locFilter === "all"
       ? allAdminLocations
       : allAdminLocations.filter((l) => l.status === locFilter);
+  const filteredUsers = useMemo(() => {
+    const q = userSearch.trim().toLowerCase();
+    if (!q) return users;
+    return users.filter((u) =>
+      [
+        u.fullName,
+        u.email,
+        u.faculty,
+        u.role,
+        (u as any).matricNo,
+        (u as any).phone,
+      ].some((v) => typeof v === "string" && v.toLowerCase().includes(q)),
+    );
+  }, [users, userSearch]);
+
   const pendingCount = pendingLocations.filter(
     (l) => l.status === "pending",
   ).length;
@@ -1533,11 +1549,34 @@ function AdminPanel() {
       {/* ── USERS TAB ── */}
       {activeTab === "users" && (
         <View style={{ flex: 1 }}>
+          <View style={styles.userSearchBar}>
+            <Search size={16} color="#64748B" strokeWidth={2.2} />
+            <TextInput
+              style={styles.userSearchInput}
+              placeholder="Search users by name, email, faculty…"
+              placeholderTextColor="#999"
+              value={userSearch}
+              onChangeText={setUserSearch}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="search"
+            />
+            {userSearch.length > 0 && (
+              <TouchableOpacity
+                onPress={() => setUserSearch("")}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <X size={16} color="#64748B" strokeWidth={2.4} />
+              </TouchableOpacity>
+            )}
+          </View>
           <Text style={styles.sectionCount}>
-            {users.length} registered user{users.length !== 1 ? "s" : ""}
+            {userSearch.trim()
+              ? `${filteredUsers.length} of ${users.length} users`
+              : `${users.length} registered user${users.length !== 1 ? "s" : ""}`}
           </Text>
           <ScrollView contentContainerStyle={styles.listContent}>
-            {users.map((u) => (
+            {filteredUsers.map((u) => (
               <View key={u.id} style={styles.card}>
                 <View style={styles.cardHeader}>
                   <Text style={styles.cardTitle}>
@@ -2962,7 +3001,21 @@ const styles = StyleSheet.create({
   listContent: { padding: 16, gap: 12 },
   emptyState: { alignItems: "center", paddingTop: 60, gap: 12 },
   emptyText: { color: "#999", fontSize: 15 },
-  sectionCount: { padding: 14, color: "#666", fontSize: 13 },
+  sectionCount: { paddingHorizontal: 14, paddingVertical: 10, color: "#666", fontSize: 13 },
+  userSearchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#e0e0e0",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginHorizontal: 16,
+    marginTop: 14,
+  },
+  userSearchInput: { flex: 1, fontSize: 14, color: "#222", padding: 0 },
   addBtn: {
     flexDirection: "row",
     alignItems: "center",

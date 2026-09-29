@@ -4237,7 +4237,7 @@ export default function HomeScreen() {
 
       {/* ── BOTTOM SHEET ── */}
       {!navigating && (
-        <View {...sheetBodyPan.panHandlers} style={[styles.keyboardAvoid, { bottom: keyboardHeight }]}>
+        <View style={[styles.keyboardAvoid, { bottom: keyboardHeight }]}>
           <Animated.View
             style={[
               styles.bottomSheet,
@@ -4266,38 +4266,12 @@ export default function HomeScreen() {
                 paddingBottom:
                   (activeTab === "friends" && !friendsExpanded) ||
                   (activeTab === "events" && !eventsExpanded)
-                    ? Math.round(SCREEN_HEIGHT * 0.3)
+                    ? 0
                     : 0,
               }}
               scrollEventThrottle={16}
               onScroll={(e) => {
                 sheetScrollYRef.current = e.nativeEvent.contentOffset.y;
-                if (
-                  activeTab === "events" &&
-                  !eventsExpandedRef.current &&
-                  e.nativeEvent.contentOffset.y > 12
-                )
-                  toggleEventsSheet(true);
-                if (
-                  activeTab === "friends" &&
-                  !friendsExpandedRef.current &&
-                  e.nativeEvent.contentOffset.y > 12
-                )
-                  toggleFriendsSheet(true);
-              }}
-              onScrollEndDrag={(e) => {
-                if (
-                  activeTab === "events" &&
-                  eventsExpandedRef.current &&
-                  e.nativeEvent.contentOffset.y < -40
-                )
-                  toggleEventsSheet(false);
-                if (
-                  activeTab === "friends" &&
-                  friendsExpandedRef.current &&
-                  e.nativeEvent.contentOffset.y < -40
-                )
-                  toggleFriendsSheet(false);
               }}
             >
               {renderBottomContent()}
@@ -4536,7 +4510,7 @@ const styles = StyleSheet.create({
   evPillText: { fontSize: 10, fontWeight: "700", color: "#1a5c38" },
 
   // ── Friends (redesign) ──
-  fHandleZone: { alignItems: "center", paddingVertical: 10, marginTop: -8 },
+  fHandleZone: { alignItems: "center", paddingVertical: 18, marginTop: -8 },
   fHandle: { width: 40, height: 5, borderRadius: 3, backgroundColor: "#d5d9d7" },
   fHeaderRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 14 },
   fHeaderIcon: {
@@ -4549,7 +4523,7 @@ const styles = StyleSheet.create({
   },
   fTitle: { fontSize: 22, fontWeight: "800", color: "#111" },
   fSubtitle: { fontSize: 12, color: "#777", marginTop: 1 },
-  fShareLabel: { fontSize: 10, fontWeight: "700", color: "#4a8c63", marginTop: -2 },
+  fShareLabel: { fontSize: 10, fontWeight: "700", color: "#4a8c63", marginTop: 6 },
   fTabs: {
     flexDirection: "row",
     backgroundColor: "#f1f5f3",
