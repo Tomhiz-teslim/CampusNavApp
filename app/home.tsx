@@ -4279,7 +4279,7 @@ export default function HomeScreen() {
                 paddingBottom:
                   (activeTab === "friends" && !friendsExpanded) ||
                   (activeTab === "events" && !eventsExpanded)
-                    ? 0
+                    ? Math.round(SCREEN_HEIGHT * 0.3)
                     : 0,
               }}
               scrollEventThrottle={16}
@@ -4288,13 +4288,13 @@ export default function HomeScreen() {
                 if (
                   activeTab === "events" &&
                   !eventsExpandedRef.current &&
-                  e.nativeEvent.contentOffset.y > 999999
+                  e.nativeEvent.contentOffset.y > 12
                 )
                   toggleEventsSheet(true);
                 if (
                   activeTab === "friends" &&
                   !friendsExpandedRef.current &&
-                  e.nativeEvent.contentOffset.y > 999999
+                  e.nativeEvent.contentOffset.y > 12
                 )
                   toggleFriendsSheet(true);
               }}
