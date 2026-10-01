@@ -27,13 +27,28 @@ import {
 } from "react-native";
 import { database } from "../lib/firebase";
 
-type Msg = { id: string; from: string; text: string; ts: number };
+type Msg = { id: string; from: string; text: string; ts: number; seenAt?: number };
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 export const chatIdFor = (a: string, b: string) => [a, b].sort().join("_");
 
 // Deletes messages older than 24h from the database
 export async function purgeExpiredChat(chatId: string) {
+  try {
+    const snap = await get(ref(database, `chats/${chatId}/messages`));
+    const updates: Record<string, null> = {};
+    snap.forEach((child) => {
+      const seenAt = child.val()?.seenAt;
+      if (typeof seenAt === "number" && seenAt < Date.now() - DAY_MS) {
+        updates[child.key as string] = null;
+      }
+    });
+    if (Object.keys(updates).length)
+      await update(ref(database, `chats/${chatId}/messages`), updates);
+  } catch {}
+}
+
+async function purgeExpiredChatOld(chatId: string) {
   try {
     const q = query(
       ref(database, `chats/${chatId}/messages`),
@@ -76,7 +91,7 @@ export default function ChatScreen({
       setMessages(
         Object.entries(data)
           .map(([id, v]: any) => ({ id, ...v }))
-                   .filter((m: Msg) => m.ts > Date.now() - DAY_MS)
+                   .filter((m: Msg) => !m.seenAt || m.seenAt > Date.now() - DAY_MS)
           .sort((a: Msg, b: Msg) => a.ts - b.ts),
       );
     });
@@ -86,6 +101,16 @@ export default function ChatScreen({
       unsub();
     };
   }, [chatId]);
+
+  useEffect(() => {
+    const unseen = messages.filter((m) => m.from !== userId && !m.seenAt);
+    if (!unseen.length) return;
+    const updates: Record<string, any> = {};
+    unseen.forEach((m) => {
+      updates[`${m.id}/seenAt`] = serverTimestamp();
+    });
+    update(ref(database, `chats/${chatId}/messages`), updates).catch(() => {});
+  }, [messages]);
 
   function send() {
     const t = text.trim();
@@ -125,7 +150,7 @@ export default function ChatScreen({
 
           <View style={s.notice}>
         <Text style={s.noticeText}>
-          🕒 Messages in this chat disappear after 24 hours.
+          🕒 Messages disappear 24 hours after they're seen.
         </Text>
       </View>
 
@@ -139,9 +164,12 @@ export default function ChatScreen({
         renderItem={({ item }) => {
           const mine = item.from === userId;
           return (
-            <View style={[s.bubble, mine ? s.mine : s.theirs]}>
-              <Text style={[s.msgText, mine && { color: "#fff" }]}>{item.text}</Text>
-            </View>
+            <>
+              <View style={[s.bubble, mine ? s.mine : s.theirs]}>
+                <Text style={[s.msgText, mine && { color: "#fff" }]}>{item.text}</Text>
+              </View>
+              {mine && item.seenAt ? <Text style={s.seenLabel}>Seen</Text> : null}
+            </>
           );
         }}
       />
@@ -186,6 +214,7 @@ const s = StyleSheet.create({
   mine: { alignSelf: "flex-end", backgroundColor: "#1a5c38", borderBottomRightRadius: 4 },
   theirs: { alignSelf: "flex-start", backgroundColor: "#f0f2f1", borderBottomLeftRadius: 4 },
   msgText: { fontSize: 14, color: "#222" },
+  seenLabel: { alignSelf: "flex-end", fontSize: 10, color: "#999", marginTop: -2, marginBottom: 8, marginRight: 4 },
   inputRow: {
     flexDirection: "row",
     alignItems: "flex-end",

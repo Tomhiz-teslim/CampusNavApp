@@ -1846,6 +1846,28 @@ export default function HomeScreen() {
     }
   }
 
+  function handleRecenter() {
+    const loc = userLocationRef.current ?? userLocation;
+    if (!loc) {
+      showAlert(
+        "Location unavailable",
+        "Your location isn't ready yet.",
+        MapPin,
+      );
+      return;
+    }
+    if (activeTab !== "home") closeTab();
+    mapRef.current?.animateCamera(
+      {
+        center: { latitude: loc.latitude, longitude: loc.longitude },
+        zoom: 17,
+        heading: 0,
+        pitch: 0,
+      },
+      { duration: 600 },
+    );
+  }
+
   function handleCancelDirections() {
     setDirections(null);
     setNavigating(false);
@@ -4326,9 +4348,20 @@ export default function HomeScreen() {
                 {[
                   { tab: "home", Icon: Home, label: "Home" },
                   { tab: "buildings", Icon: MapPin, label: "Places" },
+                  { tab: "recenter", Icon: Navigation, label: "" },
                   { tab: "friends", Icon: Users, label: "Friends" },
-                  { tab: "events", Icon: Calendar, label: "Events" },
-                ].map(({ tab, Icon, label }) => (
+                  
+                ].map(({ tab, Icon, label }) =>
+                  tab === "recenter" ? (
+                    <TouchableOpacity
+                      key="recenter"
+                      style={styles.navCenterBtn}
+                      activeOpacity={0.85}
+                      onPress={handleRecenter}
+                    >
+                      <Navigation size={24} color="#fff" strokeWidth={2.2} fill="#fff" />
+                    </TouchableOpacity>
+                  ) : (
                   <TouchableOpacity
                     key={tab}
                     style={[
@@ -5048,6 +5081,23 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   navItemActive: { backgroundColor: "#e8f0fe" },
+  navCenterBtn: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: "#1a5c38",
+    borderWidth: 5,
+    borderColor: "rgba(47,174,96,0.35)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginHorizontal: 6,
+    marginTop: -4,
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 6,
+  },
   navIcon: { fontSize: 22 },
   navLabel: { fontSize: 11, color: "#999", marginTop: 4 },
   navActive: { color: "#1A73E8", fontWeight: "700" },
