@@ -1920,8 +1920,8 @@ export default function HomeScreen() {
       latitude: loc.latitude,
       longitude: loc.longitude,
       icon: "📍",
-      description: "You are here",
-      category: "other",
+      description: "Finding your address…",
+      category: "me",
     };
     setSelectedEvent(null);
     setSelected(base);
@@ -1942,10 +1942,14 @@ export default function HomeScreen() {
       }
     }
     if (nearest && nearestDist <= 120) {
-      setSelected({
-        ...base,
-        description: `You are near ${nearest.name} (${Math.round(nearestDist)}m)`,
-      });
+      setSelected((prev: any) =>
+        prev?.id === "__me__"
+          ? {
+              ...prev,
+              description: `Near ${nearest.name} (${Math.round(nearestDist)}m away)`,
+            }
+          : prev,
+      );
       return;
     }
 
@@ -1956,9 +1960,23 @@ export default function HomeScreen() {
         const line = [addr.name, addr.street, addr.district, addr.city]
           .filter(Boolean)
           .join(", ");
-        if (line) setSelected({ ...base, description: line });
+        const finalLine =
+          line ||
+          `${loc.latitude.toFixed(5)}, ${loc.longitude.toFixed(5)}`;
+        setSelected((prev: any) =>
+          prev?.id === "__me__" ? { ...prev, description: finalLine } : prev,
+        );
       }
-    } catch {}
+    } catch {
+      setSelected((prev: any) =>
+        prev?.id === "__me__"
+          ? {
+              ...prev,
+              description: `${loc.latitude.toFixed(5)}, ${loc.longitude.toFixed(5)}`,
+            }
+          : prev,
+      );
+    }
   }
 
   function handleCancelDirections() {
@@ -1995,7 +2013,7 @@ export default function HomeScreen() {
       );
       return;
     }
-    const url = `[maps.google.com](https://maps.google.com/?q=${userLocation.latitude},${userLocation.longitude})`;
+    const url = `https://maps.google.com/?q=${userLocation.latitude},${userLocation.longitude}`;
     await Share.share({
       message: `My current location on UNILAG campus: ${url}`,
       title: "Share My Location",
@@ -4314,6 +4332,7 @@ export default function HomeScreen() {
 
       {/* ── SELECTED CARD ── */}
       {selected &&
+        selected.id !== "__me__" &&
         !directions &&
         !loadingDirs &&
         activeTab === "home" &&
@@ -4324,6 +4343,54 @@ export default function HomeScreen() {
             onGetDirections={handleGetDirections}
             onClose={() => setSelected(null)}
           />
+        )}
+
+      {/* ── MY LOCATION CARD ── */}
+      {selected &&
+        selected.id === "__me__" &&
+        !directions &&
+        !loadingDirs &&
+        activeTab === "home" &&
+        !navigating && (
+          <View style={styles.meCard}>
+            <View style={styles.meHeader}>
+              <View style={styles.meIconBox}>
+                <LocateFixed size={20} color="#1A73E8" strokeWidth={2.4} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.meTitle}>You are here</Text>
+                <Text style={styles.meDesc} numberOfLines={3}>
+                  {selected.description}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setSelected(null)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <X size={18} color="#999" strokeWidth={2.4} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.meMetaRow}>
+              <View style={styles.meChip}>
+                <Text style={styles.meChipText}>
+                  {isOnCampus(selected.latitude, selected.longitude)
+                    ? "On campus"
+                    : "Off campus"}
+                </Text>
+              </View>
+              <Text style={styles.meCoords}>
+                {selected.latitude.toFixed(5)}, {selected.longitude.toFixed(5)}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.meShareBtn}
+              onPress={handleShareLocation}
+              activeOpacity={0.85}
+            >
+              <MapPin size={16} color="#fff" strokeWidth={2.4} />
+              <Text style={styles.meShareText}>Share my location</Text>
+            </TouchableOpacity>
+          </View>
         )}
 
       {/* ── EVENT POPUP ── */}
@@ -5784,4 +5851,54 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   arBtnText: { color: "#fff", fontSize: 12, fontWeight: "800" },
+
+  meCard: {
+    position: "absolute",
+    top: 130,
+    left: 16,
+    right: 16,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 14,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  meHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
+  meIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "#e8f0fe",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  meTitle: { fontSize: 16, fontWeight: "800", color: "#111" },
+  meDesc: { fontSize: 13, color: "#666", marginTop: 2, lineHeight: 18 },
+  meMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 12,
+  },
+  meChip: {
+    backgroundColor: "#e8f5ee",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  meChipText: { fontSize: 11, fontWeight: "700", color: "#1a5c38" },
+  meCoords: { fontSize: 11, color: "#999" },
+  meShareBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#1a5c38",
+    borderRadius: 12,
+    paddingVertical: 12,
+    marginTop: 12,
+  },
+  meShareText: { color: "#fff", fontSize: 14, fontWeight: "700" },
 });
