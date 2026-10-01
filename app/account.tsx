@@ -2546,7 +2546,7 @@ function UserAccount() {
     <ScrollView style={styles.root} contentContainerStyle={styles.userContent}>
       {/* ── HERO TOP ── */}
       <ImageBackground
-        source={require("../assets/images/unilag.jpg")}
+        source={require("../assets/images/Unilag.jpg")}
         style={styles.profileHeader}
         imageStyle={styles.profileHeaderImage}
       >
