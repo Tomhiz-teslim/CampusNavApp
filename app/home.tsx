@@ -92,6 +92,8 @@ import {
 import { StyledModal, useStyledModal } from "./StyledModal";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+// 5 equal nav slots (sheet has 16px padding each side)
+const NAV_SLOT = Math.floor((SCREEN_WIDTH - 32) / 5);
 
 // Old LayoutAnimation calls now do nothing; the sheet uses its own animation
 const LayoutAnimation = {
@@ -537,6 +539,48 @@ export default function HomeScreen() {
   const [sharingLocation, setSharingLocation] = useState(true);
 
   const { config: modal, confirm, alert: showAlert } = useStyledModal();
+
+  // ── Loading splash overlay ──
+  // Stays up until friends/events/community have loaded, for at least 1.8s
+  // so the logo animation plays, and never longer than 8s.
+  const [splashVisible, setSplashVisible] = useState(true);
+  const [minTimePassed, setMinTimePassed] = useState(false);
+  const [splashTimedOut, setSplashTimedOut] = useState(false);
+  const splashOpacity = useRef(new Animated.Value(1)).current;
+  const splashLogoOpacity = useRef(new Animated.Value(1)).current;
+  const splashLogoScale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(splashLogoOpacity, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.spring(splashLogoScale, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+    ]).start();
+    const minT = setTimeout(() => setMinTimePassed(true), 1800);
+    const maxT = setTimeout(() => setSplashTimedOut(true), 8000);
+    return () => {
+      clearTimeout(minT);
+      clearTimeout(maxT);
+    };
+  }, []);
+
+  const dataReady = friendsLoaded && eventsLoaded && communityLoaded;
+  useEffect(() => {
+    if (!minTimePassed || !(dataReady || splashTimedOut)) return;
+    Animated.timing(splashOpacity, {
+      toValue: 0,
+      duration: 400,
+      useNativeDriver: true,
+    }).start(() => setSplashVisible(false));
+  }, [minTimePassed, dataReady, splashTimedOut]);
 
   const params = useLocalSearchParams<{
     eventLat?: string;
@@ -1846,7 +1890,7 @@ export default function HomeScreen() {
     }
   }
 
-  function handleRecenter() {
+  async function handleRecenter() {
     const loc = userLocationRef.current ?? userLocation;
     if (!loc) {
       showAlert(
@@ -1857,15 +1901,64 @@ export default function HomeScreen() {
       return;
     }
     if (activeTab !== "home") closeTab();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setFollowUser(true);
     mapRef.current?.animateCamera(
       {
         center: { latitude: loc.latitude, longitude: loc.longitude },
-        zoom: 17,
+        zoom: 18,
         heading: 0,
         pitch: 0,
       },
       { duration: 600 },
     );
+
+    // Show "You are here" immediately, then enrich it
+    const base = {
+      id: "__me__",
+      name: "Your location",
+      latitude: loc.latitude,
+      longitude: loc.longitude,
+      icon: "📍",
+      description: "You are here",
+      category: "other",
+    };
+    setSelectedEvent(null);
+    setSelected(base);
+
+    // Nearest campus building within 120m
+    let nearest: any = null;
+    let nearestDist = Infinity;
+    for (const b of BUILDINGS) {
+      const d = haversineMetres(
+        loc.latitude,
+        loc.longitude,
+        b.latitude,
+        b.longitude,
+      );
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearest = b;
+      }
+    }
+    if (nearest && nearestDist <= 120) {
+      setSelected({
+        ...base,
+        description: `You are near ${nearest.name} (${Math.round(nearestDist)}m)`,
+      });
+      return;
+    }
+
+    // Otherwise fall back to a street address
+    try {
+      const [addr] = await Location.reverseGeocodeAsync(loc);
+      if (addr) {
+        const line = [addr.name, addr.street, addr.district, addr.city]
+          .filter(Boolean)
+          .join(", ");
+        if (line) setSelected({ ...base, description: line });
+      }
+    } catch {}
   }
 
   function handleCancelDirections() {
@@ -4448,6 +4541,33 @@ export default function HomeScreen() {
         />
       )}
 
+      {/* ── LOADING SPLASH OVERLAY ── */}
+      {splashVisible && (
+        <Animated.View
+          style={[styles.splashOverlay, { opacity: splashOpacity }]}
+        >
+          <View style={styles.splashLogoWrap}>
+            <Animated.Image
+              source={require("../assets/images/app_logo.png")}
+              style={[
+                styles.splashLogo,
+                {
+                  opacity: splashLogoOpacity,
+                  transform: [{ scale: splashLogoScale }],
+                },
+              ]}
+              resizeMode="contain"
+            />
+          </View>
+          <Animated.View
+            style={[styles.splashBrandTag, { opacity: splashLogoOpacity }]}
+          >
+            <Text style={styles.splashBrandFrom}>from</Text>
+            <Text style={styles.splashBrandName}>EVEN Technologies</Text>
+          </Animated.View>
+        </Animated.View>
+      )}
+
       {/* ── AR MODE OVERLAY ── */}
       {arMode && navigating && directions && selected && userLocation && (
         <ARNavigationGate
@@ -4469,6 +4589,30 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+
+  // ── Loading splash overlay ──
+  splashOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 9999,
+    elevation: 9999,
+  },
+  splashLogoWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
+  splashLogo: { width: SCREEN_WIDTH * 0.85, height: SCREEN_WIDTH * 0.85 },
+  splashBrandTag: { alignItems: "center", paddingBottom: 48 },
+  splashBrandFrom: { fontSize: 13, color: "#999", marginBottom: 2 },
+  splashBrandName: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1a5c38",
+    letterSpacing: 0.3,
+  },
 
   // ── Events (redesign) ──
   evSearchBar: {
@@ -5069,14 +5213,14 @@ const styles = StyleSheet.create({
   bottomNavContent: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-around",
+    justifyContent: "flex-start",
     paddingTop: 10,
-    paddingHorizontal: 4,
+    paddingHorizontal: 0,
     minWidth: "100%",
   },
   navItem: {
+    width: NAV_SLOT,
     alignItems: "center",
-    paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
   },
@@ -5090,7 +5234,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(47,174,96,0.35)",
     justifyContent: "center",
     alignItems: "center",
-    marginHorizontal: 6,
+    marginHorizontal: (NAV_SLOT - 58) / 2,
     marginTop: -4,
     shadowColor: "#000",
     shadowOpacity: 0.2,

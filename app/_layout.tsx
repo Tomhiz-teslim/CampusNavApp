@@ -22,7 +22,7 @@ export default function RootLayout() {
   // resolves, so it doesn't just flash by on a fast connection.
   const [minTimeElapsed, setMinTimeElapsed] = useState(false);
   useEffect(() => {
-    const t = setTimeout(() => setMinTimeElapsed(true), 3000);
+    const t = setTimeout(() => setMinTimeElapsed(true), 1200);
     return () => clearTimeout(t);
   }, []);
 
