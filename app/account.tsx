@@ -2661,11 +2661,6 @@ function UserAccount() {
           </View>
         )}
 
-        <View style={styles.heroTagline} pointerEvents="none">
-          <Text style={styles.heroTaglineText}>Better Campus</Text>
-          <Text style={styles.heroTaglineText}>Experience</Text>
-          <View style={styles.heroTaglineUnderline} />
-        </View>
       </ImageBackground>
 
       {/* ── EDIT FORM (appears below hero when editing) ── */}
@@ -3346,26 +3341,6 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: "rgba(18, 74, 44, 0.82)",
-  },
-  heroTagline: {
-    position: "absolute",
-    bottom: 12,
-    right: 16,
-    alignItems: "flex-end",
-  },
-  heroTaglineText: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "700",
-    fontStyle: "italic",
-    lineHeight: 15,
-  },
-  heroTaglineUnderline: {
-    height: 2,
-    width: 70,
-    marginTop: 2,
-    borderRadius: 1,
-    backgroundColor: "#3ddc84",
   },
   avatar: {
     width: 76,
