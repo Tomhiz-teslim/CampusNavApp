@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import * as Haptics from "expo-haptics";
+import * as Linking from "expo-linking";
 import * as Location from "expo-location";
 import * as Notifications from "expo-notifications";
 import { router, useLocalSearchParams } from "expo-router";
@@ -394,6 +395,15 @@ export default function HomeScreen() {
   const [friendsFilter, setFriendsFilter] = useState<"all" | "nearby" | "online">("all");
   const [showAddFriend, setShowAddFriend] = useState(false);
   const [chatWith, setChatWith] = useState<any>(null);
+  const [unreadByFriend, setUnreadByFriend] = useState<Record<string, number>>({});
+  const totalUnread = Object.values(unreadByFriend).reduce((a, b) => a + b, 0);
+
+  // Opening a chat (or receiving a message while it's open) clears its unread count
+  useEffect(() => {
+    if (!chatWith || !userId) return;
+    if ((unreadByFriend[chatWith.uid] || 0) > 0)
+      remove(ref(database, `unread/${userId}/${chatWith.uid}`));
+  }, [chatWith, unreadByFriend, userId]);
 
    const friendsExpandedRef = useRef(false);
   const [eventsExpanded, setEventsExpanded] = useState(false);
@@ -1099,11 +1109,23 @@ export default function HomeScreen() {
             setFriendRequests(pending);
           },
         );
+        const unsubUnread = onValue(
+          ref(database, `unread/${user.uid}`),
+          (snap) => {
+            const data = snap.val() || {};
+            const counts: Record<string, number> = {};
+            Object.entries(data).forEach(([uid, n]: any) => {
+              if (typeof n === "number" && n > 0) counts[uid] = n;
+            });
+            setUnreadByFriend(counts);
+          },
+        );
         dbUnsubscribers.push(
           unsubUserProfile,
           unsubAllUsers,
           unsubFriends,
           unsubRequests,
+          unsubUnread,
         );
       }
 
@@ -2013,9 +2035,18 @@ export default function HomeScreen() {
       );
       return;
     }
-    const url = `https://maps.google.com/?q=${userLocation.latitude},${userLocation.longitude}`;
+    const sharerName = userName || "A friend";
+    const url = Linking.createURL("/", {
+      queryParams: {
+        eventLat: String(userLocation.latitude),
+        eventLng: String(userLocation.longitude),
+        eventName: `${sharerName}'s location`,
+        eventIcon: "📍",
+        eventDesc: "Shared location",
+      },
+    });
     await Share.share({
-      message: `My current location on UNILAG campus: ${url}`,
+      message: `${sharerName} shared their location with you on CampusNav.\n\nTap to open in the app:\n${url}`,
       title: "Share My Location",
     });
   }
@@ -2716,6 +2747,13 @@ export default function HomeScreen() {
               </View>
               <TouchableOpacity style={styles.fCircleBtn} onPress={() => setChatWith(f)}>
                 <MessageCircle size={17} color="#1a5c38" strokeWidth={2.4} />
+                {(unreadByFriend[f.uid] || 0) > 0 && (
+                  <View style={styles.fMsgBadge}>
+                    <Text style={styles.fMsgBadgeText}>
+                      {unreadByFriend[f.uid] > 9 ? "9+" : unreadByFriend[f.uid]}
+                    </Text>
+                  </View>
+                )}
               </TouchableOpacity>
               {f.loc && (
                 <TouchableOpacity style={styles.fCircleBtn} onPress={() => locateFriend(f)}>
@@ -4562,13 +4600,16 @@ export default function HomeScreen() {
                         color={activeTab === tab ? "#1A73E8" : "#999"}
                         strokeWidth={activeTab === tab ? 2.4 : 2}
                       />
-                      {tab === "friends" && friendRequests.length > 0 && (
-                        <View style={styles.navBadge}>
-                          <Text style={styles.navBadgeText}>
-                            {friendRequests.length}
-                          </Text>
-                        </View>
-                      )}
+                      {tab === "friends" &&
+                        friendRequests.length + totalUnread > 0 && (
+                          <View style={styles.navBadge}>
+                            <Text style={styles.navBadgeText}>
+                              {friendRequests.length + totalUnread > 99
+                                ? "99+"
+                                : friendRequests.length + totalUnread}
+                            </Text>
+                          </View>
+                        )}
                     </View>
                     <Text
                       style={[
@@ -4604,6 +4645,7 @@ export default function HomeScreen() {
           userId={userId}
           friend={chatWith}
           photo={friendPhotos[chatWith.uid]}
+          myName={userName}
           onClose={() => setChatWith(null)}
         />
       )}
@@ -4897,6 +4939,21 @@ const styles = StyleSheet.create({
   },
   fBannerBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
   map: { flex: 1 },
+  fMsgBadge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    backgroundColor: "#e74c3c",
+    borderRadius: 9,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: "#fff",
+  },
+  fMsgBadgeText: { color: "#fff", fontSize: 10, fontWeight: "800" },
 
   topBar: {
     position: "absolute",

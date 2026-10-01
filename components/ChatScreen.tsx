@@ -1,6 +1,7 @@
 import {
   endAt,
   get,
+  increment,
   limitToLast,
   onValue,
   orderByChild,
@@ -125,8 +126,11 @@ export default function ChatScreen({
     set(push(ref(database, `chats/${chatId}/messages`)), {
       from: userId,
       text: t,
-    ts: serverTimestamp(),
+      ts: serverTimestamp(),
     });
+    update(ref(database), {
+      [`unread/${friend.uid}/${userId}`]: increment(1),
+    }).catch(() => {});
   }
 
   return (
