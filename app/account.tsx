@@ -47,6 +47,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  ImageBackground,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -2544,8 +2545,13 @@ function UserAccount() {
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.userContent}>
       {/* ── HERO TOP ── */}
-      <View style={styles.profileHeader}>
-        {/* decorative circle */}
+      <ImageBackground
+        source={require("../assets/images/unilag.jpg")}
+        style={styles.profileHeader}
+        imageStyle={styles.profileHeaderImage}
+      >
+        {/* green tint so the photo reads as a subtle backdrop */}
+        <View style={styles.profileHeaderOverlay} pointerEvents="none" />
         <View style={styles.heroBubble1} />
 
         {/* Edit / Save button */}
@@ -2654,7 +2660,13 @@ function UserAccount() {
             <Text style={styles.heroSuccessText}>Profile updated!</Text>
           </View>
         )}
-      </View>
+
+        <View style={styles.heroTagline} pointerEvents="none">
+          <Text style={styles.heroTaglineText}>Better Campus</Text>
+          <Text style={styles.heroTaglineText}>Experience</Text>
+          <View style={styles.heroTaglineUnderline} />
+        </View>
+      </ImageBackground>
 
       {/* ── EDIT FORM (appears below hero when editing) ── */}
       {editing && (
@@ -3325,6 +3337,35 @@ const styles = StyleSheet.create({
     alignItems: "center",
     position: "relative",
     overflow: "hidden",
+  },
+  profileHeaderImage: { resizeMode: "cover" },
+  profileHeaderOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(18, 74, 44, 0.82)",
+  },
+  heroTagline: {
+    position: "absolute",
+    bottom: 12,
+    right: 16,
+    alignItems: "flex-end",
+  },
+  heroTaglineText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "700",
+    fontStyle: "italic",
+    lineHeight: 15,
+  },
+  heroTaglineUnderline: {
+    height: 2,
+    width: 70,
+    marginTop: 2,
+    borderRadius: 1,
+    backgroundColor: "#3ddc84",
   },
   avatar: {
     width: 76,
