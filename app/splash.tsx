@@ -28,6 +28,7 @@ export default function SplashScreen() {
     ]).start();
   }, []);
 
+  return <View style={{ flex: 1, backgroundColor: "#fff" }} />;
   return (
     <View style={styles.container}>
       <View style={styles.logoWrap}>

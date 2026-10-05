@@ -94,7 +94,15 @@ import { StyledModal, useStyledModal } from "./StyledModal";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 // 5 equal nav slots (sheet has 16px padding each side)
-const NAV_SLOT = Math.floor((SCREEN_WIDTH - 32) / 6);
+const CENTER_GAP = 84; // empty space left for the floating button
+const NAV_LEFT = [
+  { tab: "home", Icon: Home, label: "Home" },
+  { tab: "buildings", Icon: MapPin, label: "Places" },
+];
+const NAV_RIGHT = [
+  { tab: "events", Icon: Calendar, label: "Events" },
+  { tab: "friends", Icon: Users, label: "Friends" },
+];
 
 // Old LayoutAnimation calls now do nothing; the sheet uses its own animation
 const LayoutAnimation = {
@@ -3553,6 +3561,69 @@ export default function HomeScreen() {
     );
   }
 
+  // ── Bottom nav ─────────────────────────────────────────────────────────────
+  function handleNavPress(tab: string) {
+    if (tab !== "events") {
+      eventsExpandedRef.current = false;
+      setEventsExpanded(false);
+    }
+    if ((tab === "events" || tab === "friends") && activeTab === tab) {
+      closeTab();
+      return;
+    }
+    setFriendsExpanded(false);
+    setActiveTab(tab);
+    if (tab === "buildings") {
+      mapRef.current?.animateToRegion(
+        {
+          latitude: 6.517,
+          longitude: 3.393,
+          latitudeDelta: 0.008,
+          longitudeDelta: 0.008,
+        },
+        600,
+      );
+    }
+  }
+
+  function renderNavItem({ tab, Icon, label }: any) {
+    const active = activeTab === tab;
+    const badgeCount =
+      tab === "friends" ? friendRequests.length + totalUnread : 0;
+    return (
+      <TouchableOpacity
+        key={tab}
+        style={styles.navItem}
+        activeOpacity={0.7}
+        onPress={() => handleNavPress(tab)}
+      >
+        <View>
+          <Icon
+            size={22}
+            color={active ? "#1a5c38" : "#8a94a0"}
+            strokeWidth={active ? 2.4 : 2}
+          />
+          {badgeCount > 0 && (
+            <View style={styles.navBadge}>
+              <Text style={styles.navBadgeText}>
+                {badgeCount > 99 ? "99+" : badgeCount}
+              </Text>
+            </View>
+          )}
+        </View>
+        <Text style={[styles.navLabel, active && styles.navActive]}>
+          {label}
+        </Text>
+        <View
+          style={[
+            styles.navActiveBar,
+            { backgroundColor: active ? "#1a5c38" : "transparent" },
+          ]}
+        />
+      </TouchableOpacity>
+    );
+  }
+
   // ── Bottom sheet content ───────────────────────────────────────────────────
   function renderBottomContent() {
     if (directions || loadingDirs) return renderDirectionsPanel();
@@ -4358,6 +4429,13 @@ export default function HomeScreen() {
               {sharingLocation ? "Live" : "Hidden"}
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.accountBtn}
+            onPress={() => router.push("../account")}
+            activeOpacity={0.8}
+          >
+            <User size={17} color="#1a5c38" strokeWidth={2.4} />
+          </TouchableOpacity>
           {friendRequests.length > 0 && (
             <View style={styles.requestBadge}>
               <Text style={styles.requestBadgeText}>
@@ -4536,100 +4614,27 @@ export default function HomeScreen() {
               {renderBottomContent()}
             </ScrollView>
             {!directions && !loadingDirs && (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.bottomNavScroll}
-                contentContainerStyle={styles.bottomNavContent}
-                keyboardShouldPersistTaps="handled"
-              >
-                {[
-                  { tab: "home", Icon: Home, label: "Home" },
-                  { tab: "buildings", Icon: MapPin, label: "Places" },
-                  { tab: "events", Icon: Calendar, label: "Events" },
-                  { tab: "recenter", Icon: Navigation, label: "" },
-                  { tab: "friends", Icon: Users, label: "Friends" },
-                  { tab: "account", Icon: User, label: "Account" },
-                  
-                ].map(({ tab, Icon, label }) =>
-                  tab === "recenter" ? (
-                    <TouchableOpacity
-                      key="recenter"
-                      style={styles.navCenterBtn}
-                      activeOpacity={0.85}
-                      onPress={handleRecenter}
-                    >
-                      <Navigation size={24} color="#fff" strokeWidth={2.2} fill="#fff" />
-                    </TouchableOpacity>
-                  ) : (
-                  <TouchableOpacity
-                    key={tab}
-                    style={[
-                      styles.navItem,
-                      activeTab === tab && styles.navItemActive,
-                    ]}
-                    onPress={() => {
-                                           if (tab === "account") {
-                        router.push("../account");
-                        return;
-                      }
-                      if (tab !== "events") {
-                        eventsExpandedRef.current = false;
-                        setEventsExpanded(false);
-                      }
-                      if (tab === "events" && activeTab === "events") {
-                        closeTab();
-                        return;
-                      }
-                      if (tab === "friends" && activeTab === "friends") {
-                        closeTab();
-                        return;
-                      }
-                      setFriendsExpanded(false);
-                      setActiveTab(tab);
-                      if (tab === "buildings") {
-                        mapRef.current?.animateToRegion(
-                          {
-                            latitude: 6.517,
-                            longitude: 3.393,
-                            latitudeDelta: 0.008,
-                            longitudeDelta: 0.008,
-                          },
-                          600,
-                        );
-                      }
-                    }}
-                  >
-                    <View>
-                      <Icon
-                        size={20}
-                        color={activeTab === tab ? "#1A73E8" : "#999"}
-                        strokeWidth={activeTab === tab ? 2.4 : 2}
-                      />
-                      {tab === "friends" &&
-                        friendRequests.length + totalUnread > 0 && (
-                          <View style={styles.navBadge}>
-                            <Text style={styles.navBadgeText}>
-                              {friendRequests.length + totalUnread > 99
-                                ? "99+"
-                                : friendRequests.length + totalUnread}
-                            </Text>
-                          </View>
-                        )}
-                    </View>
-                    <Text
-                      style={[
-                        styles.navLabel,
-                        activeTab === tab && styles.navActive,
-                      ]}
-                    >
-                      {label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-
-              </ScrollView>
+              <View style={styles.bottomNavWrap}>
+                <View style={styles.bottomNavBar}>
+                  {NAV_LEFT.map(renderNavItem)}
+                  <View style={{ width: CENTER_GAP }} />
+                  {NAV_RIGHT.map(renderNavItem)}
+                </View>
+                <TouchableOpacity
+                  style={styles.navCenterBtn}
+                  activeOpacity={0.85}
+                  onPress={handleRecenter}
+                >
+                  <Navigation
+                    size={24}
+                    color="#fff"
+                    strokeWidth={2.2}
+                    fill="#fff"
+                  />
+                </TouchableOpacity>
+              </View>
             )}
+                
           </Animated.View>
         </View>
       )}
@@ -5328,43 +5333,45 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
 
-  bottomNavScroll: {
-    flexGrow: 0,
-    flexShrink: 0,
-    borderTopWidth: 1,
-    borderTopColor: "#f0f0f0",
-  },
-  bottomNavContent: {
+
+  bottomNavWrap: { paddingTop: 26 },
+  bottomNavBar: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-start",
-    paddingTop: 10,
-    paddingHorizontal: 0,
-    minWidth: "100%",
+    borderTopWidth: 1,
+    borderTopColor: "#eef0ef",
+    paddingTop: 12,
+    paddingBottom: 2,
   },
-  navItem: {
-    width: NAV_SLOT,
-    alignItems: "center",
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  navItemActive: { backgroundColor: "#e8f0fe" },
+  navItem: { flex: 1, alignItems: "center", paddingVertical: 2 },
+  navActiveBar: { width: 22, height: 3, borderRadius: 2, marginTop: 5 },
   navCenterBtn: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+    position: "absolute",
+    top: 0,
+    left: "50%",
+    marginLeft: -31,
+    width: 62,
+    height: 62,
+    borderRadius: 31,
     backgroundColor: "#1a5c38",
     borderWidth: 5,
-    borderColor: "rgba(47,174,96,0.35)",
+    borderColor: "rgba(47,174,96,0.25)",
     justifyContent: "center",
     alignItems: "center",
-    marginHorizontal: (NAV_SLOT - 58) / 2,
-    marginTop: -4,
-    shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 6,
+    shadowColor: "#1a5c38",
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+  },
+  accountBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#e8f5ee",
+    justifyContent: "center",
+    alignItems: "center",
+    marginLeft: 2,
   },
   navIcon: { fontSize: 22 },
   navLabel: { fontSize: 10, color: "#999", marginTop: 4 },
