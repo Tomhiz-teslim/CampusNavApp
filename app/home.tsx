@@ -94,7 +94,7 @@ import { StyledModal, useStyledModal } from "./StyledModal";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 // 5 equal nav slots (sheet has 16px padding each side)
-const NAV_SLOT = Math.floor((SCREEN_WIDTH - 32) / 7);
+const NAV_SLOT = Math.floor((SCREEN_WIDTH - 32) / 6);
 
 // Old LayoutAnimation calls now do nothing; the sheet uses its own animation
 const LayoutAnimation = {
@@ -4549,6 +4549,7 @@ export default function HomeScreen() {
                   { tab: "events", Icon: Calendar, label: "Events" },
                   { tab: "recenter", Icon: Navigation, label: "" },
                   { tab: "friends", Icon: Users, label: "Friends" },
+                  { tab: "account", Icon: User, label: "Account" },
                   
                 ].map(({ tab, Icon, label }) =>
                   tab === "recenter" ? (
@@ -4568,7 +4569,11 @@ export default function HomeScreen() {
                       activeTab === tab && styles.navItemActive,
                     ]}
                     onPress={() => {
-                                           if (tab !== "events") {
+                                           if (tab === "account") {
+                        router.push("../account");
+                        return;
+                      }
+                      if (tab !== "events") {
                         eventsExpandedRef.current = false;
                         setEventsExpanded(false);
                       }
@@ -4622,20 +4627,7 @@ export default function HomeScreen() {
                     </Text>
                   </TouchableOpacity>
                 ))}
-                <TouchableOpacity
-                  style={styles.navItem}
-                  onPress={() => router.push("./service")}
-                >
-                  <Store size={20} color="#999" strokeWidth={2} />
-                  <Text style={styles.navLabel}>Services</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.navItem}
-                  onPress={() => router.push("../account")}
-                >
-                  <User size={20} color="#999" strokeWidth={2} />
-                  <Text style={styles.navLabel} numberOfLines={1}>Account</Text>
-                </TouchableOpacity>
+
               </ScrollView>
             )}
           </Animated.View>

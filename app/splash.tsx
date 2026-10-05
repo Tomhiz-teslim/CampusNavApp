@@ -9,8 +9,8 @@ const { width } = Dimensions.get("window");
 // flicker back to the login screen on cold start. All navigation
 // decisions now live in _layout.tsx, driven by Firebase auth state.
 export default function SplashScreen() {
-  const opacity = useRef(new Animated.Value(0)).current;
-  const scale = useRef(new Animated.Value(0.8)).current;
+  const opacity = useRef(new Animated.Value(1)).current;
+  const scale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     Animated.parallel([
