@@ -94,7 +94,7 @@ import { StyledModal, useStyledModal } from "./StyledModal";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 // 5 equal nav slots (sheet has 16px padding each side)
-const NAV_SLOT = Math.floor((SCREEN_WIDTH - 32) / 5);
+const NAV_SLOT = Math.floor((SCREEN_WIDTH - 32) / 7);
 
 // Old LayoutAnimation calls now do nothing; the sheet uses its own animation
 const LayoutAnimation = {
@@ -4546,6 +4546,7 @@ export default function HomeScreen() {
                 {[
                   { tab: "home", Icon: Home, label: "Home" },
                   { tab: "buildings", Icon: MapPin, label: "Places" },
+                  { tab: "events", Icon: Calendar, label: "Events" },
                   { tab: "recenter", Icon: Navigation, label: "" },
                   { tab: "friends", Icon: Users, label: "Friends" },
                   
@@ -4623,10 +4624,17 @@ export default function HomeScreen() {
                 ))}
                 <TouchableOpacity
                   style={styles.navItem}
+                  onPress={() => router.push("./service")}
+                >
+                  <Store size={20} color="#999" strokeWidth={2} />
+                  <Text style={styles.navLabel}>Services</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.navItem}
                   onPress={() => router.push("../account")}
                 >
                   <User size={20} color="#999" strokeWidth={2} />
-                  <Text style={styles.navLabel}>Dashboard</Text>
+                  <Text style={styles.navLabel} numberOfLines={1}>Account</Text>
                 </TouchableOpacity>
               </ScrollView>
             )}
@@ -5367,7 +5375,7 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   navIcon: { fontSize: 22 },
-  navLabel: { fontSize: 11, color: "#999", marginTop: 4 },
+  navLabel: { fontSize: 10, color: "#999", marginTop: 4 },
   navActive: { color: "#1A73E8", fontWeight: "700" },
   navBadge: {
     position: "absolute",
