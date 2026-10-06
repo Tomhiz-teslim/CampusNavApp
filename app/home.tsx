@@ -1811,6 +1811,57 @@ export default function HomeScreen() {
     );
   }
 
+  // ── Google Maps POI tap → behaves like one of our own markers ─────────────
+  async function handlePoiClick(e: any) {
+    const { coordinate, name, placeId } = e.nativeEvent;
+    if (!coordinate) return;
+    const cleanName = (name || "Place").replace(/\n/g, " ");
+
+    const poi = {
+      id: `poi_${placeId || `${coordinate.latitude},${coordinate.longitude}`}`,
+      name: cleanName,
+      latitude: coordinate.latitude,
+      longitude: coordinate.longitude,
+      icon: "📍",
+      description: "Place on Google Maps",
+      category: "other",
+      isGooglePoi: true,
+    };
+
+    if (searchFocused) {
+      setSearchFocused(false);
+      Keyboard.dismiss();
+    }
+    setSelectedEvent(null);
+    setDirections(null);
+    setNavigating(false);
+    setSelected(poi);
+
+    mapRef.current?.animateToRegion(
+      {
+        latitude: poi.latitude,
+        longitude: poi.longitude,
+        latitudeDelta: 0.004,
+        longitudeDelta: 0.004,
+      },
+      500,
+    );
+
+    // Optional: enrich the description with a street address
+    try {
+      const [addr] = await Location.reverseGeocodeAsync(coordinate);
+      if (addr) {
+        const line = [addr.street, addr.district, addr.city]
+          .filter(Boolean)
+          .join(", ");
+        if (line)
+          setSelected((prev: any) =>
+            prev?.id === poi.id ? { ...prev, description: line } : prev,
+          );
+      }
+    } catch {}
+  }
+
   // ── Directions actions ─────────────────────────────────────────────────────
   async function handleGetDirections() {
     if (!selected) return;
@@ -4272,7 +4323,8 @@ export default function HomeScreen() {
         rotateEnabled={true}
         pitchEnabled={true}
         showsBuildings={true}
-        showsPointsOfInterest={false}
+        showsPointsOfInterest={true}
+        onPoiClick={handlePoiClick}
         initialRegion={{
           latitude: 6.517,
           longitude: 3.393,
@@ -4424,6 +4476,27 @@ export default function HomeScreen() {
               <View style={[mStyles.pinTail, { borderTopColor: "#d97706" }]} />
             </Marker>
           ))}
+
+        {selected?.isGooglePoi && (
+          <Marker
+            coordinate={{
+              latitude: selected.latitude,
+              longitude: selected.longitude,
+            }}
+            anchor={{ x: 0.5, y: 1 }}
+            tracksViewChanges={Platform.OS === "android"}
+          >
+            <View
+              style={[
+                mStyles.pin,
+                { backgroundColor: "#1A73E8", borderColor: "#e8f0fe" },
+              ]}
+            >
+              <MapPin size={14} color="#fff" strokeWidth={2.4} />
+            </View>
+            <View style={[mStyles.pinTail, { borderTopColor: "#1A73E8" }]} />
+          </Marker>
+        )}
 
         {navigating && routeSplit.traveled.length > 1 && (
           <Polyline
