@@ -2046,7 +2046,7 @@ export default function HomeScreen() {
       latitude: loc.latitude,
       longitude: loc.longitude,
       icon: "📍",
-      description: "Finding your address…",
+      description: "Finding where you are…",
       category: "me",
     };
     setSelectedEvent(null);
@@ -2072,7 +2072,10 @@ export default function HomeScreen() {
         prev?.id === "__me__"
           ? {
               ...prev,
-              description: `Near ${nearest.name} (${Math.round(nearestDist)}m away)`,
+              description:
+                nearestDist < 30
+                  ? `You're right at ${nearest.name}`
+                  : `Closest landmark: ${nearest.name} · ${Math.round(nearestDist)}m away`,
             }
           : prev,
       );
@@ -2088,7 +2091,7 @@ export default function HomeScreen() {
           .join(", ");
         const finalLine =
           line ||
-          `${loc.latitude.toFixed(5)}, ${loc.longitude.toFixed(5)}`;
+          "Somewhere on the map";
         setSelected((prev: any) =>
           prev?.id === "__me__" ? { ...prev, description: finalLine } : prev,
         );
@@ -2098,7 +2101,7 @@ export default function HomeScreen() {
         prev?.id === "__me__"
           ? {
               ...prev,
-              description: `${loc.latitude.toFixed(5)}, ${loc.longitude.toFixed(5)}`,
+              description: "Somewhere on the map",
             }
           : prev,
       );
@@ -4591,7 +4594,7 @@ export default function HomeScreen() {
                 <LocateFixed size={20} color="#1A73E8" strokeWidth={2.4} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.meTitle}>You are here</Text>
+                <Text style={styles.meTitle}>You're here</Text>
                 <Text style={styles.meDesc} numberOfLines={3}>
                   {selected.description}
                 </Text>
@@ -4612,7 +4615,7 @@ export default function HomeScreen() {
                 </Text>
               </View>
               <Text style={styles.meCoords}>
-                {selected.latitude.toFixed(5)}, {selected.longitude.toFixed(5)}
+                Updated just now
               </Text>
             </View>
             <TouchableOpacity
