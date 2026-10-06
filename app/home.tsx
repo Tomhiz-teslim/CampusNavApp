@@ -536,6 +536,8 @@ export default function HomeScreen() {
 
   const sheetScrollYRef = useRef(0);
   const placesScrollYRef = useRef(0);
+  const placesTouchStartYRef = useRef(0);
+  const placesStartedAtTopRef = useRef(false);
   const gestureStartedAtTopRef = useRef(false);
 
   const sheetBodyPan = useRef(
@@ -565,6 +567,21 @@ export default function HomeScreen() {
         else if (tab === "events" && eventsExpandedRef.current)
           toggleEventsSheet(false);
         else if (tab !== "home") closeTab();
+      },
+    }),
+  ).current;
+
+  const placesListPan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponderCapture: (_, g) =>
+        activeTabRef.current === "buildings" &&
+        placesScrollYRef.current <= 2 &&
+        g.dy > 12 &&
+        Math.abs(g.dy) > Math.abs(g.dx) * 1.5,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderRelease: (_, g) => {
+        if (g.dy > 60 || g.vy > 0.8) closeTab();
       },
     }),
   ).current;
@@ -4217,6 +4234,7 @@ export default function HomeScreen() {
           <ScrollView
             style={styles.buildingsList}
             nestedScrollEnabled
+            {...placesListPan.panHandlers}
             onScroll={(e) => {
               placesScrollYRef.current = e.nativeEvent.contentOffset.y;
             }}
