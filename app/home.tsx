@@ -4531,10 +4531,10 @@ export default function HomeScreen() {
           >
             {sharingLocation ? (
               <View style={styles.pillIconRing}>
-                <MapPin size={12} color="#1a5c38" strokeWidth={2.6} />
+                <MapPin size={9} color="#1a5c38" strokeWidth={2.6} />
               </View>
             ) : (
-              <EyeOff size={18} color="#555" strokeWidth={2.4} />
+              <EyeOff size={14} color="#555" strokeWidth={2.4} />
             )}
             <View
               style={[
@@ -5134,24 +5134,24 @@ const styles = StyleSheet.create({
   sharingPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    borderRadius: 24,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    gap: 6,
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     backgroundColor: "#e8f5ee",
     marginRight: 10,
   },
   sharingPillOff: { backgroundColor: "#eee" },
   pillIconRing: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 1.5,
     borderColor: "#1a5c38",
     justifyContent: "center",
     alignItems: "center",
   },
-  pillDot: { width: 7, height: 7, borderRadius: 4 },
+  pillDot: { width: 5, height: 5, borderRadius: 3 },
   sharingPillOld: {
     flexDirection: "row",
     alignItems: "center",
@@ -5163,7 +5163,7 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   sharingPillActive: { backgroundColor: "#e8f5ee" },
-  sharingPillText: { fontSize: 14, fontWeight: "800", color: "#0f172a" },
+  sharingPillText: { fontSize: 12, fontWeight: "700", color: "#0f172a" },
   requestBadge: {
     position: "absolute",
     top: 6,
