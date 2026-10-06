@@ -28,6 +28,7 @@ import {
   GraduationCap,
   Music,
   Trophy,
+  Trash2,
   LayoutGrid,
   Briefcase,
   Heart,
@@ -337,6 +338,70 @@ function CommunityLocationMarker({
   );
 }
 
+function SwipeToDeleteRow({
+  children,
+  onDelete,
+}: {
+  children: React.ReactNode;
+  onDelete: () => void;
+}) {
+  const translateX = useRef(new Animated.Value(0)).current;
+  const onDeleteRef = useRef(onDelete);
+  onDeleteRef.current = onDelete;
+
+  const pan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) =>
+        g.dx > 10 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
+      onPanResponderMove: (_, g) => {
+        if (g.dx > 0) translateX.setValue(g.dx);
+      },
+      onPanResponderRelease: (_, g) => {
+        if (g.dx > SCREEN_WIDTH * 0.3 || g.vx > 0.8) {
+          Animated.timing(translateX, {
+            toValue: SCREEN_WIDTH,
+            duration: 180,
+            useNativeDriver: true,
+          }).start(() => onDeleteRef.current());
+        } else {
+          Animated.spring(translateX, {
+            toValue: 0,
+            useNativeDriver: true,
+          }).start();
+        }
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(translateX, {
+          toValue: 0,
+          useNativeDriver: true,
+        }).start();
+      },
+    }),
+  ).current;
+
+  return (
+    <View style={{ overflow: "hidden" }}>
+      <View
+        style={{
+          ...StyleSheet.absoluteFillObject,
+          backgroundColor: "#e74c3c",
+          justifyContent: "center",
+          alignItems: "flex-start",
+          paddingLeft: 20,
+        }}
+      >
+        <Trash2 size={18} color="#fff" strokeWidth={2.4} />
+      </View>
+      <Animated.View
+        style={{ transform: [{ translateX }], backgroundColor: "#fff" }}
+        {...pan.panHandlers}
+      >
+        {children}
+      </Animated.View>
+    </View>
+  );
+}
+
 function HighlightMatch({
   text,
   query,
@@ -525,6 +590,31 @@ export default function HomeScreen() {
       },
     }),
   ).current;
+
+  // ── Swipe down to close search ──
+  const searchActiveRef = useRef(false);
+  const searchScrollYRef = useRef(0);
+  const searchPan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponderCapture: (_, g) =>
+        searchActiveRef.current &&
+        searchScrollYRef.current <= 2 &&
+        g.dy > 20 &&
+        Math.abs(g.dy) > Math.abs(g.dx) * 1.5,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderRelease: (_, g) => {
+        if (g.dy > 50) {
+          setSearch("");
+          setSearchFocused(false);
+          Keyboard.dismiss();
+        }
+      },
+    }),
+  ).current;
+  useEffect(() => {
+    searchActiveRef.current = searchFocused || search.length > 0;
+    if (!searchActiveRef.current) searchScrollYRef.current = 0;
+  }, [searchFocused, search]);
 
   // ── NEW: distance to destination for CompassPointer ──
   const [distanceToDestination, setDistanceToDestination] =
@@ -1686,7 +1776,13 @@ export default function HomeScreen() {
     const next = [
       entry,
       ...recentSearches.filter((r) => r.id !== entry.id),
-    ].slice(0, 5);
+    ].slice(0, 3);
+    setRecentSearches(next);
+    AsyncStorage.setItem("recentSearches", JSON.stringify(next));
+  }
+
+  function removeRecentSearch(id: any) {
+    const next = recentSearches.filter((r) => r.id !== id);
     setRecentSearches(next);
     AsyncStorage.setItem("recentSearches", JSON.stringify(next));
   }
@@ -1816,7 +1912,7 @@ export default function HomeScreen() {
     AsyncStorage.getItem("recentSearches").then((saved) => {
       if (saved) {
         try {
-          setRecentSearches(JSON.parse(saved));
+          setRecentSearches(JSON.parse(saved).slice(0, 3));
         } catch {}
       }
     });
@@ -3630,7 +3726,10 @@ export default function HomeScreen() {
 
     return (
       <>
-        <View style={{ display: activeTab === "home" ? "flex" : "none" }}>
+        <View
+          {...searchPan.panHandlers}
+          style={{ display: activeTab === "home" ? "flex" : "none" }}
+        >
           <View style={styles.searchBar}>
             <Search size={18} color="#64748B" style={{ marginRight: 8 }} />
             <TextInput
@@ -3732,35 +3831,38 @@ export default function HomeScreen() {
           {searchFocused && search.length === 0 ? (
             <View style={styles.searchFocusedPanel}>
               {recentSearches.length > 0 && (
-                <>
-                  <Text style={styles.searchSectionLabel}>Recent</Text>
-                  {recentSearches.map((b) => (
-                    <TouchableOpacity
-                      key={`recent-${b.id}`}
-                      style={styles.resultItem}
-                      onPress={() => handleSelectBuilding(b)}
-                    >
-                      <View
-                        style={[
-                          styles.resultIconBox,
-                          {
-                            backgroundColor: (
-                              CATEGORY_COLORS[b.category] ||
-                              CATEGORY_COLORS.admin
-                            ).dot,
-                          },
-                        ]}
-                      >
-                        <History size={16} color="#64748B" strokeWidth={2.2} />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.resultName}>{b.name}</Text>
-                        <Text style={styles.resultDesc}>{b.description}</Text>
-                      </View>
-                    </TouchableOpacity>
-                  ))}
-                </>
-              )}
+  <>
+    <Text style={styles.searchSectionLabel}>Recent</Text>
+    {recentSearches.slice(0, 3).map((b) => (
+      <SwipeToDeleteRow
+        key={`recent-${b.id}`}
+        onDelete={() => removeRecentSearch(b.id)}
+      >
+        <TouchableOpacity
+          style={[styles.resultItem, { backgroundColor: "#fff" }]}
+          onPress={() => handleSelectBuilding(b)}
+        >
+          <View
+            style={[
+              styles.resultIconBox,
+              {
+                backgroundColor: (
+                  CATEGORY_COLORS[b.category] || CATEGORY_COLORS.admin
+                ).dot,
+              },
+            ]}
+          >
+            <History size={16} color="#64748B" strokeWidth={2.2} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.resultName}>{b.name}</Text>
+            <Text style={styles.resultDesc}>{b.description}</Text>
+          </View>
+        </TouchableOpacity>
+      </SwipeToDeleteRow>
+    ))}
+  </>
+)}
               {nearbyPlaces.length > 0 && (
                 <>
                   <Text style={styles.searchSectionLabel}>Nearby</Text>
@@ -3804,6 +3906,10 @@ export default function HomeScreen() {
           ) : search.length > 0 ? (
             <ScrollView
               style={styles.searchResults}
+              onScroll={(e) => {
+                searchScrollYRef.current = e.nativeEvent.contentOffset.y;
+              }}
+              scrollEventThrottle={16}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="on-drag"
             >
