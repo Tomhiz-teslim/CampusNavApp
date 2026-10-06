@@ -4411,20 +4411,31 @@ export default function HomeScreen() {
       {!navigating && (
         <View style={styles.topBar}>
           <View style={styles.topLeft}>
-            <Text style={styles.appName}>CampusNav</Text>
+            <Text style={styles.appName}>
+              Campus<Text style={styles.appNameAccent}>Nav</Text>
+            </Text>
+            <Text style={styles.tagline}>Find  •  Explore  •  Connect</Text>
           </View>
           <TouchableOpacity
             style={[
               styles.sharingPill,
-              sharingLocation && styles.sharingPillActive,
+              !sharingLocation && styles.sharingPillOff,
             ]}
             onPress={() => setActiveTab("friends")}
           >
             {sharingLocation ? (
-              <MapPin size={12} color="#1a5c38" strokeWidth={2.4} />
+              <View style={styles.pillIconRing}>
+                <MapPin size={12} color="#1a5c38" strokeWidth={2.6} />
+              </View>
             ) : (
-              <EyeOff size={12} color="#555" strokeWidth={2.4} />
+              <EyeOff size={18} color="#555" strokeWidth={2.4} />
             )}
+            <View
+              style={[
+                styles.pillDot,
+                { backgroundColor: sharingLocation ? "#2fae60" : "#aaa" },
+              ]}
+            />
             <Text style={styles.sharingPillText}>
               {sharingLocation ? "Live" : "Hidden"}
             </Text>
@@ -4434,7 +4445,7 @@ export default function HomeScreen() {
             onPress={() => router.push("../account")}
             activeOpacity={0.8}
           >
-            <User size={17} color="#1a5c38" strokeWidth={2.4} />
+            <User size={22} color="#1a5c38" strokeWidth={2.2} />
           </TouchableOpacity>
           {friendRequests.length > 0 && (
             <View style={styles.requestBadge}>
@@ -4969,6 +4980,24 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     backgroundColor: "#fff",
+    borderRadius: 22,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 6,
+  },
+  topBarOld: {
+    position: "absolute",
+    top: 55,
+    left: 16,
+    right: 16,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#fff",
     borderRadius: 14,
     padding: 12,
     shadowColor: "#000",
@@ -4977,7 +5006,19 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   topLeft: { flex: 1 },
-  appName: { fontSize: 15, fontWeight: "600", color: "#1a5c38" },
+  appName: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#0f172a",
+    letterSpacing: -0.3,
+  },
+  appNameAccent: { color: "#1a5c38" },
+  tagline: {
+    fontSize: 11,
+    color: "#94a3b8",
+    fontWeight: "500",
+    marginTop: 2,
+  },
   campusSubtitle: {
     fontSize: 11,
     color: "#4a8c63",
@@ -4985,6 +5026,27 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   sharingPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 24,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: "#e8f5ee",
+    marginRight: 10,
+  },
+  sharingPillOff: { backgroundColor: "#eee" },
+  pillIconRing: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: "#1a5c38",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  pillDot: { width: 7, height: 7, borderRadius: 4 },
+  sharingPillOld: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
@@ -4995,8 +5057,22 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   sharingPillActive: { backgroundColor: "#e8f5ee" },
-  sharingPillText: { fontSize: 12, fontWeight: "700", color: "#555" },
+  sharingPillText: { fontSize: 14, fontWeight: "800", color: "#0f172a" },
   requestBadge: {
+    position: "absolute",
+    top: 6,
+    right: 12,
+    backgroundColor: "#e74c3c",
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 5,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
+  requestBadgeOld: {
     backgroundColor: "#e74c3c",
     borderRadius: 10,
     minWidth: 20,
@@ -5365,6 +5441,14 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   accountBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#e8f5ee",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  accountBtnOld: {
     width: 34,
     height: 34,
     borderRadius: 17,
