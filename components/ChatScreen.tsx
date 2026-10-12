@@ -94,8 +94,10 @@ function SwipeToReply({
 
   const pan = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) =>
-        g.dx < -10 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponderCapture: (_, g) =>
+        g.dx < -8 && Math.abs(g.dx) > Math.abs(g.dy) * 1.2,
+      onPanResponderTerminationRequest: () => false,
       onPanResponderMove: (_, g) => {
         if (g.dx < 0) x.setValue(Math.max(g.dx, -80));
       },
@@ -149,6 +151,16 @@ export default function ChatScreen({
   const [editing, setEditing] = useState<Msg | null>(null);
   const [menuMsg, setMenuMsg] = useState<Msg | null>(null);
   const inputRef = useRef<TextInput>(null);
+  const [mutual, setMutual] = useState(true);
+
+  // Chat unlocks only once your own friend record is "accepted"
+  useEffect(() => {
+    const unsub = onValue(
+      ref(database, `friends/${userId}/${friend.uid}`),
+      (snap) => setMutual(snap.val()?.status === "accepted"),
+    );
+    return () => unsub();
+  }, [friend.uid, userId]);
 
   // Android: the keyboard doesn't resize the window on many devices
   useEffect(() => {
@@ -263,7 +275,7 @@ export default function ChatScreen({
 
   function send() {
     const t = text.trim();
-    if (!t) return;
+    if (!t || !mutual) return;
     if (editing) {
       if (t !== editing.text)
         update(ref(database, `chats/${chatId}/messages/${editing.id}`), {
@@ -408,7 +420,8 @@ export default function ChatScreen({
           style={s.input}
           value={text}
           onChangeText={setText}
-          placeholder="Message…"
+          placeholder={mutual ? "Message…" : "Waiting for them to add you back"}
+          editable={mutual}
           placeholderTextColor="#999"
           multiline
         />

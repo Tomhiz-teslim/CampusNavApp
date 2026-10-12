@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import {
-  View, Text, TextInput, TouchableOpacity,
-  StyleSheet, ActivityIndicator,
+  View, Text, TextInput, TextInputProps, TouchableOpacity,
+  Image, ImageBackground, StyleSheet, ActivityIndicator,
   KeyboardAvoidingView, Platform, ScrollView,
 } from "react-native";
+import { Compass, Eye, EyeOff, Lock, LogIn, Mail } from "lucide-react-native";
 import { auth, database } from "../lib/firebase";
 import {
   signInWithEmailAndPassword,
@@ -20,20 +21,83 @@ import { router } from "expo-router";
 // later on i will make it possible when i want to upload the app to Play
 // store and app store (Google OAuth needs the app to be on a signed release
 // build / store listing to fully validate — re-enable by uncommenting the
-// imports above and the block marked GOOGLE SIGN-IN below, then restoring
-// the button in the JSX further down).
+// imports above and the block marked GOOGLE SIGN-IN below, then pointing the
+// Google button's onPress at handleGoogleSignIn).
 
-// Required once per app so the OAuth browser tab closes itself and
-// hands control back to the app after Google redirects.
 // WebBrowser.maybeCompleteAuthSession();
 
 // const GOOGLE_WEB_CLIENT_ID = "407873622972-bru14q2e9qvc9lb2nvasgl9g6l0h2n15.apps.googleusercontent.com";
 // const GOOGLE_ANDROID_CLIENT_ID = "407873622972-iik25a7m5qe5ki9ep5rrhsijpdqd2ukb.apps.googleusercontent.com";
 // const GOOGLE_IOS_CLIENT_ID = "407873622972-q338efs78bc2q6326f10of1t267pti54.apps.googleusercontent.com";
 
+const GREEN = "#0f5c36";
+const MUTED_BLUE = "#8aa4c8";
+
+// ── Shared pieces ────────────────────────────────────────────────────────────
+function AuthHeader() {
+  return (
+    <ImageBackground
+      source={require("../assets/images/loginbck.jpg")}
+      style={styles.header}
+      resizeMode="cover"
+    >
+      <View style={styles.headerOverlay} />
+      <Image
+        source={require("../assets/images/logo.png")}
+        style={styles.logo}
+        resizeMode="contain"
+      />
+      <Text style={styles.tagline}>
+        Find your way around the University of Lagos, see events and connect
+        with friends.
+      </Text>
+    </ImageBackground>
+  );
+}
+
+function Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <AuthHeader />
+        <View style={styles.card}>{children}</View>
+        <View style={styles.compassCircle} pointerEvents="none">
+          <Compass size={26} color="#fff" strokeWidth={1.8} />
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+function Field({
+  icon,
+  right,
+  ...props
+}: { icon: React.ReactNode; right?: React.ReactNode } & TextInputProps) {
+  return (
+    <View style={styles.field}>
+      {icon}
+      <TextInput
+        style={styles.fieldInput}
+        placeholderTextColor="#8aa0bd"
+        {...props}
+      />
+      {right}
+    </View>
+  );
+}
+
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   // const [googleLoading, setGoogleLoading] = useState(false);
   const [resetMode, setResetMode] = useState(false);
@@ -104,6 +168,7 @@ export default function LoginScreen() {
 
   async function handleLogin() {
     setErrorMsg("");
+    setSuccessMsg("");
     if (!email || !password) {
       setErrorMsg("Please enter email and password");
       return;
@@ -142,119 +207,233 @@ export default function LoginScreen() {
     }
   }
 
+  const messages = (
+    <>
+      {errorMsg ? (
+        <View style={styles.errorBox}>
+          <Text style={styles.errorText}>⚠️ {errorMsg}</Text>
+        </View>
+      ) : null}
+      {successMsg ? (
+        <View style={styles.successBox}>
+          <Text style={styles.successText}>✅ {successMsg}</Text>
+        </View>
+      ) : null}
+    </>
+  );
+
   if (resetMode) {
     return (
-      <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-        <View style={styles.card}>
-          <Text style={styles.title}>Reset Password</Text>
-          <Text style={styles.subtitle}>We'll send a reset link to your email</Text>
-          {errorMsg ? <View style={styles.errorBox}><Text style={styles.errorText}>⚠️ {errorMsg}</Text></View> : null}
-          {successMsg ? <View style={styles.successBox}><Text style={styles.successText}>✅ {successMsg}</Text></View> : null}
-          <TextInput
-            style={styles.input} placeholder="Email address" placeholderTextColor="#999"
-            value={resetEmail} onChangeText={(t) => { setResetEmail(t); setErrorMsg(""); setSuccessMsg(""); }}
-            keyboardType="email-address" autoCapitalize="none" autoFocus
-          />
-          <TouchableOpacity style={styles.btn} onPress={handleForgotPassword} disabled={resetLoading}>
-            {resetLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Send Reset Link</Text>}
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.linkBtn} onPress={() => setResetMode(false)}>
-            <Text style={styles.linkText}>Back to Login</Text>
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
+      <Shell>
+        <Text style={styles.title}>Reset Password</Text>
+        <Text style={styles.subtitle}>We'll send a reset link to your email</Text>
+        {messages}
+        <Field
+          icon={<Mail size={22} color={GREEN} strokeWidth={2.2} />}
+          placeholder="Email address"
+          value={resetEmail}
+          onChangeText={(t) => { setResetEmail(t); setErrorMsg(""); setSuccessMsg(""); }}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoFocus
+        />
+        <TouchableOpacity style={styles.btn} onPress={handleForgotPassword} disabled={resetLoading}>
+          {resetLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Send Reset Link</Text>}
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.linkBtn}
+          onPress={() => { setResetMode(false); setErrorMsg(""); setSuccessMsg(""); }}
+        >
+          <Text style={styles.registerLink}>Back to Login</Text>
+        </TouchableOpacity>
+      </Shell>
     );
   }
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <View style={styles.card}>
-          <Text style={styles.title}>UniLag Navigator</Text>
-          <Text style={styles.subtitle}>Campus Navigation System</Text>
-          {errorMsg ? <View style={styles.errorBox}><Text style={styles.errorText}>⚠️ {errorMsg}</Text></View> : null}
-          <TextInput
-            style={styles.input} placeholder="Email address" placeholderTextColor="#999"
-            value={email} onChangeText={(t) => { setEmail(t); setErrorMsg(""); }}
-            keyboardType="email-address" autoCapitalize="none"
-          />
-          <TextInput
-            style={styles.input} placeholder="Password" placeholderTextColor="#999"
-            value={password} onChangeText={(t) => { setPassword(t); setErrorMsg(""); }}
-            secureTextEntry
-          />
-          <TouchableOpacity onPress={() => { setResetMode(true); setErrorMsg(""); }} style={styles.forgotBtn}>
-            <Text style={styles.forgotText}>Forgot password?</Text>
+    <Shell>
+      <Text style={styles.title}>Welcome Back</Text>
+      <Text style={styles.subtitle}>Log in to your Campus Navigator account</Text>
+      {messages}
+
+      <Field
+        icon={<Mail size={22} color={GREEN} strokeWidth={2.2} />}
+        placeholder="Email address"
+        value={email}
+        onChangeText={(t) => { setEmail(t); setErrorMsg(""); setSuccessMsg(""); }}
+        keyboardType="email-address"
+        autoCapitalize="none"
+      />
+      <Field
+        icon={<Lock size={22} color={GREEN} strokeWidth={2.2} />}
+        placeholder="Password"
+        value={password}
+        onChangeText={(t) => { setPassword(t); setErrorMsg(""); setSuccessMsg(""); }}
+        secureTextEntry={!showPassword}
+        autoCapitalize="none"
+        right={
+          <TouchableOpacity
+            onPress={() => setShowPassword((v) => !v)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            {showPassword ? (
+              <Eye size={22} color="#4b5563" strokeWidth={2.2} />
+            ) : (
+              <EyeOff size={22} color="#4b5563" strokeWidth={2.2} />
+            )}
           </TouchableOpacity>
-          <TouchableOpacity style={styles.btn} onPress={handleLogin} disabled={loading}>
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Login</Text>}
-          </TouchableOpacity>
+        }
+      />
 
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>OR</Text>
-            <View style={styles.dividerLine} />
-          </View>
+      <TouchableOpacity
+        onPress={() => { setResetMode(true); setErrorMsg(""); setSuccessMsg(""); }}
+        style={styles.forgotBtn}
+      >
+        <Text style={styles.forgotText}>Forgot password?</Text>
+      </TouchableOpacity>
 
-          {/* Google Sign-In temporarily replaced with a coming-soon notice.
-              // later on i will make it possible when i want to upload the
-              // app to Play store and app store — see the commented block
-              // above for the full working implementation to restore. */}
-          <View style={styles.googleComingSoon}>
-            <Text style={styles.googleComingSoonIcon}>G</Text>
-            <Text style={styles.googleComingSoonText}>Google Sign-In coming soon</Text>
-          </View>
+      <TouchableOpacity style={styles.btn} onPress={handleLogin} disabled={loading} activeOpacity={0.85}>
+        {loading ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <>
+            <LogIn size={24} color="#fff" strokeWidth={2.2} />
+            <Text style={styles.btnText}>Log In</Text>
+          </>
+        )}
+      </TouchableOpacity>
 
-          <View style={styles.registerRow}>
-            <Text style={styles.registerText}>Don't have an account? </Text>
-            <TouchableOpacity onPress={() => router.replace("/register")}>
-              <Text style={styles.registerLink}>Register</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      <View style={styles.dividerRow}>
+        <View style={styles.dividerLine} />
+        <Text style={styles.dividerText}>OR</Text>
+        <View style={styles.dividerLine} />
+      </View>
+
+      {/* Google Sign-In is still disabled — see the commented block above.
+          To enable it later, replace this onPress with handleGoogleSignIn. */}
+      <TouchableOpacity
+        style={styles.googleBtn}
+        activeOpacity={0.85}
+        onPress={() => {
+          setErrorMsg("");
+          setSuccessMsg("Google Sign-In is coming soon");
+        }}
+      >
+        <Text style={styles.googleG}>G</Text>
+        <Text style={styles.googleText}>Continue with Google</Text>
+      </TouchableOpacity>
+
+      <View style={styles.registerRow}>
+        <Text style={styles.registerText}>Don't have an account? </Text>
+        <TouchableOpacity onPress={() => router.replace("/register")}>
+          <Text style={styles.registerLink}>Create Account</Text>
+        </TouchableOpacity>
+      </View>
+    </Shell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#1a5c38" },
-  scroll: { flexGrow: 1, alignItems: "center", justifyContent: "center", padding: 20 },
+  container: { flex: 1, backgroundColor: GREEN },
+  scroll: { flexGrow: 1 },
+
+  header: {
+    height: 300,
+    paddingTop: Platform.OS === "ios" ? 70 : 52,
+    paddingHorizontal: 24,
+    backgroundColor: GREEN,
+  },
+  headerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(12,84,48,0.72)",
+  },
+  logo: { width: 290, height: 110, marginLeft: -6 },
+  tagline: {
+    color: "#fff",
+    fontSize: 15,
+    lineHeight: 21,
+    marginTop: 10,
+    maxWidth: 330,
+  },
+
   card: {
-    backgroundColor: "#fff", borderRadius: 16, padding: 28, width: "100%",
-    shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 10, elevation: 5,
+    flex: 1,
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 34,
+    borderTopRightRadius: 34,
+    marginTop: -34,
+    paddingHorizontal: 24,
+    paddingTop: 30,
+    paddingBottom: 60,
   },
-  title: { fontSize: 26, fontWeight: "bold", color: "#1a5c38", textAlign: "center", marginBottom: 6 },
-  subtitle: { fontSize: 14, color: "#888", textAlign: "center", marginBottom: 24 },
-  errorBox: { backgroundColor: "#fff0f0", borderWidth: 1, borderColor: "#ffcccc", borderRadius: 8, padding: 12, marginBottom: 14 },
+  compassCircle: {
+    position: "absolute",
+    right: 16,
+    bottom: 16,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "rgba(15,92,54,0.18)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  title: { fontSize: 32, fontWeight: "800", color: GREEN, marginBottom: 6 },
+  subtitle: { fontSize: 16, fontWeight: "600", color: MUTED_BLUE, marginBottom: 24 },
+
+  errorBox: { backgroundColor: "#fff0f0", borderWidth: 1, borderColor: "#ffcccc", borderRadius: 12, padding: 12, marginBottom: 14 },
   errorText: { color: "#cc0000", fontSize: 13, textAlign: "center" },
-  successBox: { backgroundColor: "#f0fff4", borderWidth: 1, borderColor: "#99eebb", borderRadius: 8, padding: 12, marginBottom: 14 },
-  successText: { color: "#1a5c38", fontSize: 13, textAlign: "center" },
-  input: { borderWidth: 1.5, borderColor: "#e0e0e0", borderRadius: 10, padding: 14, fontSize: 15, marginBottom: 14, color: "#333" },
-  forgotBtn: { alignSelf: "flex-end", marginBottom: 16, marginTop: -6 },
-  forgotText: { color: "#1a5c38", fontSize: 13, fontWeight: "600" },
-  btn: { backgroundColor: "#1a5c38", borderRadius: 10, padding: 15, alignItems: "center", marginTop: 4 },
-  btnText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
-  linkBtn: { marginTop: 16, alignItems: "center" },
-  linkText: { color: "#1a5c38", fontSize: 14, fontWeight: "600" },
+  successBox: { backgroundColor: "#f0fff4", borderWidth: 1, borderColor: "#99eebb", borderRadius: 12, padding: 12, marginBottom: 14 },
+  successText: { color: GREEN, fontSize: 13, textAlign: "center" },
 
-  dividerRow: { flexDirection: "row", alignItems: "center", marginTop: 20, marginBottom: 16 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: "#e0e0e0" },
-  dividerText: { marginHorizontal: 10, color: "#999", fontSize: 12, fontWeight: "600" },
-
-  googleComingSoon: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    borderWidth: 1.5, borderColor: "#eee", borderRadius: 10, padding: 14, gap: 10,
-    backgroundColor: "#fafafa",
+  field: {
+    flexDirection: "row",
+    alignItems: "center",
+    height: 60,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#d6e0ea",
+    backgroundColor: "#f8fafc",
+    paddingHorizontal: 18,
+    marginBottom: 16,
+    gap: 16,
   },
-  googleComingSoonIcon: {
-    fontSize: 16, fontWeight: "bold", color: "#bbb",
-    borderWidth: 1.5, borderColor: "#e0e0e0", borderRadius: 12,
-    width: 24, height: 24, textAlign: "center", lineHeight: 22,
-  },
-  googleComingSoonText: { color: "#999", fontSize: 15, fontWeight: "600" },
+  fieldInput: { flex: 1, fontSize: 16, color: "#1f2937", height: "100%" },
 
-  registerRow: { flexDirection: "row", justifyContent: "center", marginTop: 20 },
-  registerText: { color: "#888", fontSize: 13 },
-  registerLink: { color: "#1a5c38", fontSize: 13, fontWeight: "700" },
+  forgotBtn: { alignSelf: "flex-end", marginTop: -4, marginBottom: 18 },
+  forgotText: { color: GREEN, fontSize: 14, fontWeight: "700" },
+
+  btn: {
+    height: 60,
+    borderRadius: 16,
+    backgroundColor: GREEN,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  btnText: { color: "#fff", fontSize: 19, fontWeight: "700" },
+  linkBtn: { marginTop: 18, alignItems: "center" },
+
+  dividerRow: { flexDirection: "row", alignItems: "center", marginVertical: 22 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: "#d6e0ea" },
+  dividerText: { marginHorizontal: 14, color: MUTED_BLUE, fontSize: 14, fontWeight: "600" },
+
+  googleBtn: {
+    height: 60,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#d6e0ea",
+    backgroundColor: "#fff",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  googleG: { fontSize: 24, fontWeight: "800", color: "#4285F4" },
+  googleText: { fontSize: 17, fontWeight: "700", color: "#0f3a5f" },
+
+  registerRow: { flexDirection: "row", justifyContent: "center", marginTop: 26 },
+  registerText: { color: MUTED_BLUE, fontSize: 15, fontWeight: "500" },
+  registerLink: { color: GREEN, fontSize: 15, fontWeight: "800" },
 });

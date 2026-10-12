@@ -78,6 +78,7 @@ import {
 import MapView from "react-native-map-clustering";
 import { Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
 import ChatScreen from "../components/ChatScreen";
+import { sendPush } from "../lib/notifications";
 import CompassPointer from "../components/CompassPointer";
 import {
   BuildingMarker,
@@ -743,6 +744,8 @@ export default function HomeScreen() {
 
   const [friends, setFriends] = useState<any[]>([]);
   const [friendRequests, setFriendRequests] = useState<any[]>([]);
+  const [sentRequests, setSentRequests] = useState<any[]>([]);
+  const prevFriendStatusRef = useRef<Record<string, string>>({});
   const [friendUsername, setFriendUsername] = useState("");
   const [addingFriend, setAddingFriend] = useState(false);
   const [friendLocations, setFriendLocations] = useState<any[]>([]);
@@ -1282,6 +1285,25 @@ export default function HomeScreen() {
               .filter(([, v]: any) => v.status === "accepted")
               .map(([uid, v]: any) => ({ uid, ...v }));
             setFriends(accepted);
+
+            setSentRequests(
+              Object.entries(data)
+                .filter(([, v]: any) => v.status === "pending_sent")
+                .map(([uid, v]: any) => ({ uid, ...v })),
+            );
+            const prevStatus = prevFriendStatusRef.current;
+            Object.entries(data).forEach(([uid, v]: any) => {
+              if (prevStatus[uid] === "pending_sent" && v.status === "accepted") {
+                showAlert(
+                  "Just added you back",
+                  `${v.name || "Someone"} just added you. You can now chat!`,
+                  Users,
+                );
+              }
+            });
+            prevFriendStatusRef.current = Object.fromEntries(
+              Object.entries(data).map(([uid, v]: any) => [uid, v.status]),
+            );
 
             accepted.forEach((f: any) => {
               const unsub = onValue(
@@ -1858,6 +1880,12 @@ export default function HomeScreen() {
       acceptedAt: Date.now(),
     });
     await remove(ref(database, `friendRequests/${userId}/${fromUid}`));
+    sendPush(
+      fromUid,
+      userName || "New friend",
+      "just added you back. You can now chat!",
+      { fromUid: userId, fromName: userName },
+    );
     showAlert("Friends!", `You and ${fromName} are now friends.`, Check);
   }
   async function handleDeclineRequest(fromUid: string) {
@@ -3332,7 +3360,13 @@ export default function HomeScreen() {
                 {f.online && <View style={styles.fOnlineBadge} />}
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.fRowName} numberOfLines={1}>
+                <Text
+                  style={[
+                    styles.fRowName,
+                    (unreadByFriend[f.uid] || 0) > 0 && { color: "#1a5c38" },
+                  ]}
+                  numberOfLines={1}
+                >
                   {f.name}
                 </Text>
                 <Text style={styles.fRowSub} numberOfLines={1}>
@@ -3361,6 +3395,26 @@ export default function HomeScreen() {
               )}
             </TouchableOpacity>
           ))
+        )}
+
+        {sentRequests.length > 0 && (
+          <>
+            <View style={[styles.fSectionRow, { marginTop: 14 }]}>
+              <Text style={styles.fSectionTitle}>Sent Requests</Text>
+              <View style={styles.tabCountBadge}>
+                <Text style={styles.tabCountBadgeText}>{sentRequests.length}</Text>
+              </View>
+            </View>
+            {sentRequests.map((r) => (
+              <View key={`sent-${r.uid}`} style={styles.fRow}>
+                <View style={{ marginRight: 12 }}>{avatar(r.uid, r.name, 46)}</View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fRowName} numberOfLines={1}>{r.name}</Text>
+                  <Text style={styles.fRowSub}>Waiting for them to add you back</Text>
+                </View>
+              </View>
+            ))}
+          </>
         )}
 
         <View style={styles.fBanner}>
