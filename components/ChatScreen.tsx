@@ -8,17 +8,22 @@ import {
   push,
   query,
   ref,
+  remove,
   set,
   serverTimestamp,
   update,
 } from "firebase/database";
 import { sendPush, setOpenChatUid } from "../lib/notifications";
-import { ArrowLeft, Send } from "lucide-react-native";
+import { ArrowLeft, Pencil, Reply, Send, X } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
 import {
+  Animated,
   FlatList,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
+  Modal,
+  PanResponder,
   Platform,
   StyleSheet,
   Text,
@@ -26,9 +31,19 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { database } from "../lib/firebase";
 
-type Msg = { id: string; from: string; text: string; ts: number; seenAt?: number };
+type Msg = {
+  id: string;
+  from: string;
+  text: string;
+  ts: number;
+  seenAt?: number;
+  deletedFor?: Record<string, boolean>;
+  edited?: boolean;
+  replyTo?: { id: string; from: string; text: string };
+};
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 export const chatIdFor = (a: string, b: string) => [a, b].sort().join("_");
@@ -66,6 +81,52 @@ async function purgeExpiredChatOld(chatId: string) {
   } catch {}
 }
 
+function SwipeToReply({
+  children,
+  onReply,
+}: {
+  children: React.ReactNode;
+  onReply: () => void;
+}) {
+  const x = useRef(new Animated.Value(0)).current;
+  const onReplyRef = useRef(onReply);
+  onReplyRef.current = onReply;
+
+  const pan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) =>
+        g.dx < -10 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
+      onPanResponderMove: (_, g) => {
+        if (g.dx < 0) x.setValue(Math.max(g.dx, -80));
+      },
+      onPanResponderRelease: (_, g) => {
+        if (g.dx < -50) onReplyRef.current();
+        Animated.spring(x, { toValue: 0, useNativeDriver: true }).start();
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(x, { toValue: 0, useNativeDriver: true }).start();
+      },
+    }),
+  ).current;
+
+  const opacity = x.interpolate({
+    inputRange: [-60, -20, 0],
+    outputRange: [1, 0.3, 0],
+    extrapolate: "clamp",
+  });
+
+  return (
+    <View>
+      <Animated.View pointerEvents="none" style={[s.swipeIcon, { opacity }]}>
+        <Reply size={18} color="#1a5c38" strokeWidth={2.4} />
+      </Animated.View>
+      <Animated.View style={{ transform: [{ translateX: x }] }} {...pan.panHandlers}>
+        {children}
+      </Animated.View>
+    </View>
+  );
+}
+
 export default function ChatScreen({
   userId,
   friend,
@@ -83,6 +144,37 @@ export default function ChatScreen({
   const [messages, setMessages] = useState<Msg[]>([]);
   const [text, setText] = useState("");
   const listRef = useRef<FlatList<Msg>>(null);
+  const [kb, setKb] = useState(0);
+  const [replyTo, setReplyTo] = useState<Msg | null>(null);
+  const [editing, setEditing] = useState<Msg | null>(null);
+  const [menuMsg, setMenuMsg] = useState<Msg | null>(null);
+  const inputRef = useRef<TextInput>(null);
+
+  // Android: the keyboard doesn't resize the window on many devices
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const show = Keyboard.addListener("keyboardDidShow", (e) => {
+      setKb(e.endCoordinates?.height ?? 0);
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+    });
+    const hide = Keyboard.addListener("keyboardDidHide", () => setKb(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
+  // Messages vanish while the chat is open once 24h after "seen" passes
+  useEffect(() => {
+    const t = setInterval(
+      () =>
+        setMessages((prev) =>
+          prev.filter((m) => !m.seenAt || m.seenAt > Date.now() - DAY_MS),
+        ),
+      60000,
+    );
+    return () => clearInterval(t);
+  }, []);
 
   useEffect(() => {
     purgeExpiredChat(chatId);
@@ -92,7 +184,10 @@ export default function ChatScreen({
       setMessages(
         Object.entries(data)
           .map(([id, v]: any) => ({ id, ...v }))
-                   .filter((m: Msg) => !m.seenAt || m.seenAt > Date.now() - DAY_MS)
+                   .filter(
+  (m: Msg) =>
+    (!m.seenAt || m.seenAt > Date.now() - DAY_MS) && !m.deletedFor?.[userId],
+)
           .sort((a: Msg, b: Msg) => a.ts - b.ts),
       );
     });
@@ -113,9 +208,72 @@ export default function ChatScreen({
     update(ref(database, `chats/${chatId}/messages`), updates).catch(() => {});
   }, [messages]);
 
+
+
+  function openMenu(m: Msg) {
+    setMenuMsg(m);
+  }
+
+  function startReply(m: Msg) {
+    setEditing(null);
+    setReplyTo(m);
+    setTimeout(() => inputRef.current?.focus(), 50);
+  }
+
+  function startEdit(m: Msg) {
+    setReplyTo(null);
+    setEditing(m);
+    setText(m.text);
+    setTimeout(() => inputRef.current?.focus(), 50);
+  }
+
+  function cancelCompose() {
+    if (editing) setText("");
+    setEditing(null);
+    setReplyTo(null);
+  }
+
+  function menuOptions(m: Msg) {
+    const mine = m.from === userId;
+    return [
+      { label: "Reply", run: () => startReply(m) },
+      { label: "Copy", run: () => Clipboard.setStringAsync(m.text) },
+      ...(mine ? [{ label: "Edit", run: () => startEdit(m) }] : []),
+      {
+        label: "Delete for me",
+        run: () =>
+          update(ref(database, `chats/${chatId}/messages/${m.id}/deletedFor`), {
+            [userId]: true,
+          }).catch(() => {}),
+      },
+      ...(mine
+        ? [
+            {
+              label: "Delete for everyone",
+              danger: true,
+              run: () =>
+                remove(ref(database, `chats/${chatId}/messages/${m.id}`)).catch(
+                  () => {},
+                ),
+            },
+          ]
+        : []),
+    ] as { label: string; danger?: boolean; run: () => void }[];
+  }
+
   function send() {
     const t = text.trim();
     if (!t) return;
+    if (editing) {
+      if (t !== editing.text)
+        update(ref(database, `chats/${chatId}/messages/${editing.id}`), {
+          text: t,
+          edited: true,
+        }).catch(() => {});
+      setEditing(null);
+      setText("");
+      return;
+    }
        setText("");
     sendPush(
       friend.uid,
@@ -127,7 +285,17 @@ export default function ChatScreen({
       from: userId,
       text: t,
       ts: serverTimestamp(),
+      ...(replyTo
+        ? {
+            replyTo: {
+              id: replyTo.id,
+              from: replyTo.from,
+              text: replyTo.text.slice(0, 120),
+            },
+          }
+        : {}),
     });
+    setReplyTo(null);
     update(ref(database), {
       [`unread/${friend.uid}/${userId}`]: increment(1),
     }).catch(() => {});
@@ -135,7 +303,7 @@ export default function ChatScreen({
 
   return (
     <KeyboardAvoidingView
-      style={s.wrap}
+      style={[s.wrap, Platform.OS === "android" && { paddingBottom: kb }]}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <View style={s.header}>
@@ -169,17 +337,74 @@ export default function ChatScreen({
           const mine = item.from === userId;
           return (
             <>
-              <View style={[s.bubble, mine ? s.mine : s.theirs]}>
+              <SwipeToReply onReply={() => startReply(item)}>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onLongPress={() => openMenu(item)}
+                style={[s.bubble, mine ? s.mine : s.theirs]}
+              >
+                {item.replyTo ? (
+                  <View style={[s.quote, mine && s.quoteMine]}>
+                    <Text
+                      style={[s.quoteName, mine && { color: "#fff" }]}
+                      numberOfLines={1}
+                    >
+                      {item.replyTo.from === userId
+                        ? "You"
+                        : friend.name.split(" ")[0]}
+                    </Text>
+                    <Text
+                      style={[s.quoteText, mine && { color: "rgba(255,255,255,0.85)" }]}
+                      numberOfLines={2}
+                    >
+                      {item.replyTo.text}
+                    </Text>
+                  </View>
+                ) : null}
                 <Text style={[s.msgText, mine && { color: "#fff" }]}>{item.text}</Text>
-              </View>
+                <Text style={[s.time, mine && { color: "rgba(255,255,255,0.7)" }]}>
+                  {item.edited ? "edited · " : ""}
+                  {new Date(item.ts).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </Text>
+              </TouchableOpacity>
+              </SwipeToReply>
               {mine && item.seenAt ? <Text style={s.seenLabel}>Seen</Text> : null}
             </>
           );
         }}
       />
 
+      {(replyTo || editing) && (
+        <View style={s.composeBar}>
+          {editing ? (
+            <Pencil size={16} color="#1a5c38" strokeWidth={2.4} />
+          ) : (
+            <Reply size={16} color="#1a5c38" strokeWidth={2.4} />
+          )}
+          <View style={{ flex: 1 }}>
+            <Text style={s.quoteName}>
+              {editing
+                ? "Editing message"
+                : `Replying to ${replyTo!.from === userId ? "yourself" : friend.name.split(" ")[0]}`}
+            </Text>
+            <Text style={s.quoteText} numberOfLines={1}>
+              {(editing || replyTo)!.text}
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={cancelCompose}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <X size={18} color="#888" strokeWidth={2.4} />
+          </TouchableOpacity>
+        </View>
+      )}
       <View style={s.inputRow}>
         <TextInput
+          ref={inputRef}
           style={s.input}
           value={text}
           onChangeText={setText}
@@ -191,6 +416,40 @@ export default function ChatScreen({
           <Send size={18} color="#fff" strokeWidth={2.4} />
         </TouchableOpacity>
       </View>
+      <Modal
+        visible={!!menuMsg}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMenuMsg(null)}
+      >
+        <TouchableOpacity
+          style={s.menuBackdrop}
+          activeOpacity={1}
+          onPress={() => setMenuMsg(null)}
+        >
+          {menuMsg && (
+            <View style={s.menuCard}>
+              <Text style={s.menuPreview} numberOfLines={2}>
+                {menuMsg.text}
+              </Text>
+              {menuOptions(menuMsg).map((o) => (
+                <TouchableOpacity
+                  key={o.label}
+                  style={s.menuRow}
+                  onPress={() => {
+                    setMenuMsg(null);
+                    o.run();
+                  }}
+                >
+                  <Text style={[s.menuText, o.danger && { color: "#e74c3c" }]}>
+                    {o.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </TouchableOpacity>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -218,6 +477,60 @@ const s = StyleSheet.create({
   mine: { alignSelf: "flex-end", backgroundColor: "#1a5c38", borderBottomRightRadius: 4 },
   theirs: { alignSelf: "flex-start", backgroundColor: "#f0f2f1", borderBottomLeftRadius: 4 },
   msgText: { fontSize: 14, color: "#222" },
+  time: { fontSize: 10, color: "#999", marginTop: 3, alignSelf: "flex-end" },
+  swipeIcon: {
+    position: "absolute",
+    right: 8,
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
+  },
+  quote: {
+    borderLeftWidth: 3,
+    borderLeftColor: "#1a5c38",
+    backgroundColor: "rgba(0,0,0,0.06)",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    marginBottom: 6,
+  },
+  quoteMine: {
+    borderLeftColor: "#fff",
+    backgroundColor: "rgba(255,255,255,0.18)",
+  },
+  quoteName: { fontSize: 11, fontWeight: "700", color: "#1a5c38" },
+  quoteText: { fontSize: 12, color: "#555", marginTop: 1 },
+  composeBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#f0f7f3",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#e0ede8",
+  },
+  menuBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "center",
+    padding: 32,
+  },
+  menuCard: { backgroundColor: "#fff", borderRadius: 16, overflow: "hidden" },
+  menuPreview: {
+    padding: 14,
+    fontSize: 13,
+    color: "#888",
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+  },
+  menuRow: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f5f5f5",
+  },
+  menuText: { fontSize: 15, fontWeight: "600", color: "#222" },
   seenLabel: { alignSelf: "flex-end", fontSize: 10, color: "#999", marginTop: -2, marginBottom: 8, marginRight: 4 },
   inputRow: {
     flexDirection: "row",

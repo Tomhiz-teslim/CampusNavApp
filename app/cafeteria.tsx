@@ -1,4 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { onValue, ref } from "firebase/database";
+import { database } from "../lib/firebase";
+import { BUILDINGS } from "../lib/campusData";
 import {
   View,
   Text,
@@ -22,13 +25,13 @@ interface Cafeteria {
   id: string;
   name: string;
   description: string;
-  hours: string;
+  hours?: string;
   latitude: number;
   longitude: number;
   tags: string[];
 }
 
-// ── Replace these with your actual campus cafeteria coordinates ──────────────
+
 const CAFETERIAS: Cafeteria[] = [
   {
     id: "caf1",
@@ -84,7 +87,44 @@ export default function CafeteriaScreen() {
   const router = useRouter();
   const [userLoc, setUserLoc] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locating, setLocating] = useState(true);
-  const [closestId, setClosestId] = useState<string | null>(null);
+  const [communityFood, setCommunityFood] = useState<any[]>([]);
+
+  useEffect(() => {
+    const unsub = onValue(ref(database, "approvedLocations"), (snap) => {
+      const data = snap.val() || {};
+      setCommunityFood(
+        Object.entries(data)
+          .map(([id, v]: any) => ({ id: `comm_${id}`, ...v }))
+          .filter((l: any) => {
+            const text = `${l.name} ${l.description} ${l.category}`.toLowerCase();
+            return (
+              l.category === "food" ||
+              /cafe|canteen|restaurant|food|eatery|buka|grill|bakery|kitchen/.test(text)
+            );
+          }),
+      );
+    });
+    return () => unsub();
+  }, []);
+
+  const foodSpots: Cafeteria[] = useMemo(
+    () =>
+      [...BUILDINGS.filter((b: any) => b.category === "food"), ...communityFood]
+        .filter(
+          (b: any) =>
+            typeof b.latitude === "number" && typeof b.longitude === "number",
+        )
+        .map((b: any) => ({
+          id: String(b.id),
+          name: b.name,
+          description: b.description || "Food spot on campus",
+          hours: b.hours || "",
+          latitude: b.latitude,
+          longitude: b.longitude,
+          tags: b.tags || ["Food"],
+        })),
+    [communityFood],
+  );
 
   useEffect(() => {
     (async () => {
@@ -94,16 +134,6 @@ export default function CafeteriaScreen() {
         const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
         const { latitude, longitude } = loc.coords;
         setUserLoc({ latitude, longitude });
-
-        // Find closest
-        let minDist = Infinity;
-        let closest = CAFETERIAS[0].id;
-        CAFETERIAS.forEach((c) => {
-          if (c.latitude === 0 && c.longitude === 0) return; // skip placeholder
-          const d = getDistanceMeters(latitude, longitude, c.latitude, c.longitude);
-          if (d < minDist) { minDist = d; closest = c.id; }
-        });
-        setClosestId(closest);
       } catch { /* silent */ }
       setLocating(false);
     })();
@@ -122,7 +152,7 @@ export default function CafeteriaScreen() {
   });
 };
 
-  const cafeteriasWithDistance = CAFETERIAS.map((c) => {
+  const cafeteriasWithDistance = foodSpots.map((c) => {
     const dist =
       userLoc && c.latitude !== 0
         ? getDistanceMeters(userLoc.latitude, userLoc.longitude, c.latitude, c.longitude)
@@ -133,6 +163,9 @@ export default function CafeteriaScreen() {
     if (b.dist === null) return -1;
     return a.dist - b.dist;
   });
+
+  const closestId =
+    cafeteriasWithDistance[0]?.dist != null ? cafeteriasWithDistance[0].id : null;
 
   return (
     <View style={styles.container}>
@@ -145,7 +178,7 @@ export default function CafeteriaScreen() {
           <View style={styles.headerIconBox}>
             <Utensils size={15} color="#fff" strokeWidth={2.2} />
           </View>
-          <Text style={styles.headerTitle}>Campus Cafeterias</Text>
+          <Text style={styles.headerTitle}>Food on Campus</Text>
         </View>
         <View style={{ width: 34 }} />
       </View>
@@ -160,7 +193,7 @@ export default function CafeteriaScreen() {
         ) : userLoc ? (
           <View style={styles.bannerRow}>
             <MapPin size={14} color="#fff" strokeWidth={2.4} />
-            <Text style={styles.bannerText}>Showing nearest cafeteria first</Text>
+            <Text style={styles.bannerText}>Showing nearest food spot first</Text>
           </View>
         ) : (
           <Text style={styles.bannerText}>Enable location for distance info</Text>
@@ -187,7 +220,7 @@ export default function CafeteriaScreen() {
                   <Text style={styles.cafName}>{caf.name}</Text>
                   <View style={styles.cafHoursRow}>
                     <Clock size={11} color="#999" strokeWidth={2.2} />
-                    <Text style={styles.cafHours}>{caf.hours}</Text>
+                    <Text style={styles.cafHours}>{caf.hours || "Hours not listed"}</Text>
                   </View>
                 </View>
                 {caf.dist !== null && (

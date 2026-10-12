@@ -10,6 +10,15 @@ import { signOut } from "firebase/auth";
 import { get, onValue, ref, remove, set, update } from "firebase/database";
 import {
   AlertTriangle,
+  ArrowUp,
+  ArrowUpLeft,
+  ArrowUpRight,
+  ChevronDown,
+  ChevronUp,
+  CornerUpLeft,
+  CornerUpRight,
+  RotateCw,
+  Undo2,
   Bell,
   Building2,
   Calendar,
@@ -89,7 +98,6 @@ import {
   kalmanFilter,
   KalmanState,
   snapToRoute,
-  stripHtml,
 } from "../lib/navUtils";
 import { StyledModal, useStyledModal } from "./StyledModal";
 
@@ -282,6 +290,84 @@ const DEFAULT_VISIBILITY_RADIUS_M = 700;
 // Matches the centroid your category-chip handler already re-centers to.
 const FALLBACK_CAMPUS_CENTER = { latitude: 6.517, longitude: 3.393 };
 
+// ── Navigation text helpers ───────────────────────────────────────────────────
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
+// Google sends: Head <b>east</b> on <b>X St</b><div>Pass by Y (on the right)</div>
+// main = the instruction, hint = the <div> part
+function splitInstruction(html: string = ""): { main: string; hint: string } {
+  const i = html.search(/<div/i);
+  const mainHtml = i === -1 ? html : html.slice(0, i);
+  const hintHtml = i === -1 ? "" : html.slice(i);
+  const clean = (h: string) =>
+    decodeEntities(h.replace(/<[^>]*>/g, " ")).replace(/\s+/g, " ").trim();
+  return { main: clean(mainHtml), hint: clean(hintHtml) };
+}
+
+function stripHtml(html: string = ""): string {
+  return splitInstruction(html).main;
+}
+
+function formatTurnDistance(m: number): string {
+  if (m < 15) return "Now";
+  if (m < 1000) return `${Math.round(m / 10) * 10} m`;
+  return `${(m / 1000).toFixed(1)} km`;
+}
+
+function formatRemaining(m: number): string {
+  if (m < 1000) return `${Math.round(m)} m`;
+  return `${(m / 1000).toFixed(1)} km`;
+}
+
+function parseDurationMins(s: string = ""): number | null {
+  const h = s.match(/(\d+)\s*h/i);
+  const m = s.match(/(\d+)\s*min/i);
+  const total = (h ? parseInt(h[1], 10) * 60 : 0) + (m ? parseInt(m[1], 10) : 0);
+  return total > 0 ? total : null;
+}
+
+function arrivalFromNow(mins: number): string {
+  return new Date(Date.now() + mins * 60000).toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function ManeuverIcon({
+  maneuver,
+  instruction,
+  size = 22,
+  color = "#222",
+}: {
+  maneuver?: string;
+  instruction?: string;
+  size?: number;
+  color?: string;
+}) {
+  const m = (maneuver || "").toLowerCase();
+  const key =
+    m || stripHtml(instruction).toLowerCase().split(" ").slice(0, 3).join(" ");
+  const p = { size, color, strokeWidth: 2.6 };
+  const left = key.includes("left");
+  const right = key.includes("right");
+  const soft = /slight|keep|fork|ramp|merge/.test(key);
+  if (key.includes("uturn") || key.includes("u-turn")) return <Undo2 {...p} />;
+  if (key.includes("roundabout")) return <RotateCw {...p} />;
+  if (left && soft) return <ArrowUpLeft {...p} />;
+  if (right && soft) return <ArrowUpRight {...p} />;
+  if (left) return <CornerUpLeft {...p} />;
+  if (right) return <CornerUpRight {...p} />;
+  return <ArrowUp {...p} />;
+}
+
 function isOnCampus(lat?: number, lng?: number): boolean {
   if (typeof lat !== "number" || typeof lng !== "number") return false;
   return (
@@ -462,6 +548,10 @@ export default function HomeScreen() {
   const [eventsLoaded, setEventsLoaded] = useState(false);
   const [communityLoaded, setCommunityLoaded] = useState(false);
   const [arMode, setArMode] = useState(false);
+  const [stepsExpanded, setStepsExpanded] = useState(false);
+  const [distanceToTurn, setDistanceToTurn] = useState<number | null>(null);
+  const [remainingM, setRemainingM] = useState<number | null>(null);
+  const [liveArrival, setLiveArrival] = useState("");
 
   // Friends sheet
   const [friendsExpanded, setFriendsExpanded] = useState(false);
@@ -1347,6 +1437,7 @@ export default function HomeScreen() {
           currentStep.endLocation.lat,
           currentStep.endLocation.lng,
         );
+        setDistanceToTurn(distToTurn);
         const WARN_500_KEY = activeStepRef.current * 10 + 1;
         const WARN_200_KEY = activeStepRef.current * 10 + 2;
 
@@ -1456,6 +1547,7 @@ export default function HomeScreen() {
 
         if (nextStep !== activeStepRef.current) {
           setActiveStep(nextStep);
+          setDistanceToTurn(null);
           activeStepRef.current = nextStep;
           stepsScrollRef.current?.scrollTo({
             y: nextStep * 80,
@@ -1525,6 +1617,13 @@ export default function HomeScreen() {
       const etaSecs = remainingDist / effectiveSpeed;
       const etaMins = Math.round(etaSecs / 60);
       setLiveEta(etaMins < 1 ? "< 1 min" : `${etaMins} min`);
+      setRemainingM(remainingDist);
+      setLiveArrival(
+        new Date(Date.now() + etaSecs * 1000).toLocaleTimeString([], {
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+      );
 
       // CHANGE 10: distFromRoute already computed above after snap decision.
       // Re-use it here instead of calling distanceToPolylineMetres twice.
@@ -2000,6 +2099,10 @@ export default function HomeScreen() {
     setDistanceToDestination(9999); // ── NEW: reset on start
 
     setNavigating(true);
+    setStepsExpanded(false);
+    setDistanceToTurn(null);
+    setRemainingM(null);
+    setLiveArrival("");
     setActiveStep(0);
     setFollowUser(true);
     lastSpokenStepRef.current = -1;
@@ -2344,6 +2447,110 @@ export default function HomeScreen() {
     const step = directions.steps[activeStep] as any;
     if (!step) return null;
     const nextStep = directions.steps[activeStep + 1] as any;
+    const { main, hint } = splitInstruction(step.instruction);
+    const distLabel =
+      distanceToTurn != null
+        ? formatTurnDistance(distanceToTurn)
+        : step.distance;
+
+    return (
+      <View style={styles.navBannerContainer} pointerEvents="box-none">
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.reroutingOverlay,
+            {
+              opacity: reroutingAnim,
+              transform: [
+                {
+                  translateY: reroutingAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-16, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <ActivityIndicator color="#fff" size="small" />
+          <Text style={styles.reroutingOverlayText}> Rerouting…</Text>
+        </Animated.View>
+
+        <View style={styles.navBannerCard}>
+          <View
+            style={[
+              styles.navArrowBox,
+              { width: 64, height: 64, borderRadius: 16 },
+            ]}
+          >
+            <ManeuverIcon
+              maneuver={step.maneuver}
+              instruction={step.instruction}
+              size={38}
+              color="#fff"
+            />
+          </View>
+          <View style={styles.navInstructionBox}>
+            <Text style={styles.navDistBig}>{distLabel}</Text>
+            <Text style={styles.navInstructionText} numberOfLines={2}>
+              {main}
+            </Text>
+            {hint && /^destination/i.test(hint) ? (
+              <Text style={styles.navHint} numberOfLines={1}>
+                {hint}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+
+        {nextStep && (
+          <View style={styles.navNextStrip}>
+            <Text style={styles.navNextLabel}>Then </Text>
+            <ManeuverIcon
+              maneuver={nextStep.maneuver}
+              instruction={nextStep.instruction}
+              size={16}
+              color="#fff"
+            />
+            <Text
+              style={[styles.navNextText, { marginLeft: 8 }]}
+              numberOfLines={1}
+            >
+              {stripHtml(nextStep.instruction)}
+            </Text>
+            <Text style={styles.navNextDist}>{nextStep.distance}</Text>
+          </View>
+        )}
+
+        <View style={styles.navFabRow} pointerEvents="box-none">
+          <TouchableOpacity
+            style={styles.navFab}
+            activeOpacity={0.85}
+            onPress={() => setMuted((v) => !v)}
+          >
+            {muted ? (
+              <VolumeX size={20} color="#888" strokeWidth={2.4} />
+            ) : (
+              <Volume2 size={20} color="#1A73E8" strokeWidth={2.4} />
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.navFab}
+            activeOpacity={0.85}
+            onPress={() => setArMode(true)}
+          >
+            <Camera size={20} color="#1A73E8" strokeWidth={2.4} />
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  function renderNavBannerOld() {
+    if (!navigating || !directions) return null;
+    const step = directions.steps[activeStep] as any;
+    if (!step) return null;
+    const nextStep = directions.steps[activeStep + 1] as any;
     const arrow = getDirectionLabel(step.maneuver);
 
     return (
@@ -2416,6 +2623,64 @@ export default function HomeScreen() {
   // ── ETA bar ────────────────────────────────────────────────────────────────
   function renderNavEtaBar() {
     if (!navigating || !directions) return null;
+    const distLabel =
+      remainingM != null ? formatRemaining(remainingM) : directions.totalDistance;
+
+    return (
+      <View style={styles.nbBar}>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          style={{ alignSelf: "center", paddingVertical: 4 }}
+          onPress={() => setStepsExpanded((v) => !v)}
+        >
+          <View style={styles.nbHandle} />
+        </TouchableOpacity>
+
+        {stepsExpanded && (
+          <View style={styles.nbSteps}>{renderDirectionsPanel()}</View>
+        )}
+
+        <View style={styles.nbRow}>
+          <TouchableOpacity
+            style={styles.nbEnd}
+            activeOpacity={0.85}
+            onPress={handleStopNavigation}
+          >
+            <X size={22} color="#fff" strokeWidth={2.8} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.nbCenter}
+            activeOpacity={0.8}
+            onPress={() => setStepsExpanded((v) => !v)}
+          >
+            <Text style={styles.nbMain}>
+              {liveEta || directions.totalDuration}
+            </Text>
+            <Text style={styles.nbSub}>
+              {distLabel}
+              {liveArrival ? ` · ${liveArrival}` : ""}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.nbToggle}
+            activeOpacity={0.85}
+            onPress={() => setStepsExpanded((v) => !v)}
+          >
+            {stepsExpanded ? (
+              <ChevronDown size={22} color="#444" strokeWidth={2.6} />
+            ) : (
+              <ChevronUp size={22} color="#444" strokeWidth={2.6} />
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  function renderNavEtaBarOld() {
+    if (!navigating || !directions) return null;
 
     const avgSpeed =
       speedHistoryRef.current.length > 0
@@ -2471,6 +2736,165 @@ export default function HomeScreen() {
 
   // ── Directions panel ───────────────────────────────────────────────────────
   function renderDirectionsPanel() {
+    if (loadingDirs)
+      return (
+        <View style={styles.loadingRow}>
+          <ActivityIndicator color="#1a5c38" size="large" />
+          <View style={{ marginLeft: 14 }}>
+            <Text style={styles.loadingTitle}>Calculating route…</Text>
+            <Text style={styles.loadingSubtitle}>to {selected?.name}</Text>
+          </View>
+        </View>
+      );
+    if (!directions) return null;
+
+    const mins = parseDurationMins(directions.totalDuration);
+
+    return (
+      <>
+        {!navigating && (
+          <>
+            <View style={styles.dirSummaryRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.dirDurationNew}>
+                  {liveEta || directions.totalDuration}
+                </Text>
+                <Text style={styles.dirMeta}>
+                  {directions.totalDistance} ·{" "}
+                  {travelMode === "walking" ? "Walking" : "Driving"}
+                  {mins ? ` · Arrive ${arrivalFromNow(mins)}` : ""}
+                </Text>
+                {selected?.name ? (
+                  <Text style={styles.dirDest} numberOfLines={1}>
+                    to {selected.name}
+                  </Text>
+                ) : null}
+              </View>
+              <View style={styles.dirActions}>
+                <TouchableOpacity
+                  style={styles.startNavBtn}
+                  onPress={handleStartNavigation}
+                >
+                  <Play size={14} color="#fff" strokeWidth={2.4} fill="#fff" />
+                  <Text style={styles.startNavBtnText}>Start</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.cancelBtn}
+                  onPress={handleCancelDirections}
+                >
+                  <X size={16} color="#555" strokeWidth={2.4} />
+                </TouchableOpacity>
+              </View>
+            </View>
+            <View style={styles.modeRow}>
+              <TouchableOpacity
+                style={[
+                  styles.modeBtn,
+                  travelMode === "walking" && styles.modeBtnActive,
+                ]}
+                onPress={() => setTravelMode("walking")}
+              >
+                <Footprints
+                  size={16}
+                  color={travelMode === "walking" ? "#1A73E8" : "#555"}
+                  strokeWidth={2.2}
+                />
+                <Text
+                  style={[
+                    styles.modeBtnText,
+                    travelMode === "walking" && styles.modeBtnTextActive,
+                  ]}
+                >
+                  Walk
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modeBtn,
+                  travelMode === "driving" && styles.modeBtnActive,
+                ]}
+                onPress={() => setTravelMode("driving")}
+              >
+                <Car
+                  size={16}
+                  color={travelMode === "driving" ? "#1A73E8" : "#555"}
+                  strokeWidth={2.2}
+                />
+                <Text
+                  style={[
+                    styles.modeBtnText,
+                    travelMode === "driving" && styles.modeBtnTextActive,
+                  ]}
+                >
+                  Drive
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+        <ScrollView
+          ref={stepsScrollRef}
+          style={styles.stepsList}
+          showsVerticalScrollIndicator={false}
+        >
+          {(directions.steps as any[]).map((step, i) => {
+            const isDone = navigating && i < activeStep;
+            const isActive = navigating && i === activeStep;
+            const { main, hint } = splitInstruction(step.instruction);
+            return (
+              <View
+                key={i}
+                style={[
+                  styles.stepRow,
+                  isActive && styles.stepRowActive,
+                  isDone && styles.stepRowDone,
+                ]}
+              >
+                <View
+                  style={[
+                    styles.stepBullet,
+                    isActive && styles.stepBulletActive,
+                    isDone && styles.stepBulletDone,
+                  ]}
+                >
+                  {isDone ? (
+                    <Check size={18} color="#fff" strokeWidth={3} />
+                  ) : (
+                    <ManeuverIcon
+                      maneuver={step.maneuver}
+                      instruction={step.instruction}
+                      size={18}
+                      color={isActive ? "#fff" : "#444"}
+                    />
+                  )}
+                </View>
+                <View style={styles.stepBody}>
+                  <Text
+                    style={[
+                      styles.stepInstruction,
+                      isActive && styles.stepInstructionActive,
+                      isDone && styles.stepInstructionDone,
+                    ]}
+                  >
+                    {main}
+                  </Text>
+                  {hint ? (
+                    <Text style={styles.stepHint} numberOfLines={1}>
+                      {hint}
+                    </Text>
+                  ) : null}
+                  <Text style={styles.stepMeta}>{step.distance}</Text>
+                </View>
+                {isActive && <View style={styles.stepActivePip} />}
+              </View>
+            );
+          })}
+        </ScrollView>
+      </>
+    );
+  }
+
+  function renderDirectionsPanelOld() {
     if (loadingDirs)
       return (
         <View style={styles.loadingRow}>
@@ -4548,7 +4972,9 @@ export default function HomeScreen() {
           <View
             style={{
               position: "absolute",
-              bottom: Platform.OS === "ios" ? 360 : 335,
+              bottom: stepsExpanded
+                ? Platform.OS === "ios" ? 360 : 335
+                : Platform.OS === "ios" ? 150 : 130,
               left: 0,
               right: 0,
             }}
@@ -4582,7 +5008,14 @@ export default function HomeScreen() {
       {/* Re-centre button */}
       {navigating && !followUser && (
         <TouchableOpacity
-          style={styles.recentreBtn}
+          style={[
+            styles.recentreBtn,
+            {
+              bottom: stepsExpanded
+                ? Platform.OS === "ios" ? 420 : 400
+                : Platform.OS === "ios" ? 125 : 108,
+            },
+          ]}
           onPress={() => {
             setFollowUser(true);
             if (userLocation)
@@ -4647,10 +5080,10 @@ export default function HomeScreen() {
           >
             <User size={22} color="#1a5c38" strokeWidth={2.2} />
           </TouchableOpacity>
-          {friendRequests.length > 0 && (
+          {friendRequests.length + totalUnread > 0 && (
             <View style={styles.requestBadge}>
               <Text style={styles.requestBadgeText}>
-                {friendRequests.length}
+                {friendRequests.length + totalUnread}
               </Text>
             </View>
           )}
@@ -4852,7 +5285,7 @@ export default function HomeScreen() {
 
       {/* ── NAVIGATION STEPS SHEET ── */}
       {navigating && directions && (
-        <View style={styles.navStepsSheet}>{renderDirectionsPanel()}</View>
+        null
       )}
 
              {/* ── CHAT ── */}
@@ -4900,7 +5333,7 @@ export default function HomeScreen() {
           destination={selected}
           heading={smoothedHeading}
           currentInstruction={
-            (directions.steps[activeStep] as any)?.instruction ?? ""
+            stripHtml((directions.steps[activeStep] as any)?.instruction ?? "")
           }
           distanceToNext={(directions.steps[activeStep] as any)?.distance ?? ""}
           nextManeuver={(directions.steps[activeStep] as any)?.maneuver ?? ""}
@@ -4914,6 +5347,81 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+
+  // ── Navigation redesign ──
+  navDistBig: {
+    fontSize: 32,
+    fontWeight: "800",
+    color: "#fff",
+    letterSpacing: -0.5,
+  },
+  navHint: { fontSize: 13, color: "rgba(255,255,255,0.8)", marginTop: 2 },
+  navFabRow: {
+    alignItems: "flex-end",
+    paddingRight: 12,
+    paddingTop: 12,
+    gap: 10,
+  },
+  navFab: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 6,
+  },
+  nbBar: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 16,
+    paddingTop: 6,
+    paddingBottom: Platform.OS === "ios" ? 30 : 16,
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 14,
+  },
+  nbHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#d5d9d7",
+  },
+  nbSteps: { maxHeight: SCREEN_HEIGHT * 0.38, marginTop: 8, marginBottom: 12 },
+  nbRow: { flexDirection: "row", alignItems: "center", marginTop: 6 },
+  nbEnd: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#e53935",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  nbCenter: { flex: 1, alignItems: "center" },
+  nbMain: { fontSize: 24, fontWeight: "800", color: "#1a5c38" },
+  nbSub: { fontSize: 13, color: "#666", marginTop: 1 },
+  nbToggle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#f1f3f4",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  dirDurationNew: { fontSize: 26, fontWeight: "800", color: "#1a5c38" },
+  dirMeta: { fontSize: 13, color: "#777", marginTop: 2 },
+  dirDest: { fontSize: 12, color: "#999", marginTop: 2 },
+  stepHint: { fontSize: 12, color: "#8a94a0", marginTop: 2 },
 
   // ── Loading splash overlay ──
   splashOverlay: {
