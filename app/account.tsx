@@ -59,6 +59,7 @@ import {
   View,
 } from "react-native";
 import { auth, database } from "../lib/firebase";
+import { SUBSCRIPTION_DURATION_MS } from "../lib/serviceShared";
 
 // ── Hardcoded campus buildings (same as map screen) ──────────────────────────
 const BUILDINGS = [
@@ -614,7 +615,7 @@ function formatEventDate(dateStr?: string, timestamp?: number | null): string {
 }
 
 // ─── Types ────────────────────────────────────────────────────────
-type AdminTab = "locations" | "events" | "users";
+type AdminTab = "locations" | "events" | "users" | "payments";
 type CoordMode = "search" | "gps" | "manual";
 
 interface LocationDoc {
@@ -703,6 +704,9 @@ function AdminPanel() {
   const [events, setEvents] = useState<EventDoc[]>([]);
   const [users, setUsers] = useState<UserDoc[]>([]);
   const [userSearch, setUserSearch] = useState("");
+  const [payments, setPayments] = useState<any[]>([]);
+  const [servicesMap, setServicesMap] = useState<Record<string, any>>({});
+  const [payFilter, setPayFilter] = useState<"pending" | "approved" | "rejected">("pending");
 
   // ── Event modal state ──
   const [showEventModal, setShowEventModal] = useState(false);
@@ -835,7 +839,20 @@ function AdminPanel() {
         );
       },
     );
+    const unsubPay = onValue(ref(database, "paymentRequests"), (snap) => {
+      const data = snap.val() || {};
+      setPayments(
+        Object.entries(data)
+          .map(([id, v]: any) => ({ id, ...v }))
+          .sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0)),
+      );
+    });
+    const unsubSvc = onValue(ref(database, "services"), (snap) => {
+      setServicesMap(snap.val() || {});
+    });
     return () => {
+      unsubPay();
+      unsubSvc();
       unsubLoc();
       unsubPending();
       unsubEv();
@@ -892,6 +909,57 @@ function AdminPanel() {
           await remove(ref(database, `${sourcePath}/${id}`));
           await remove(ref(database, `approvedLocations/${id}`));
         },
+      },
+    ]);
+
+  // ── Payment actions ──
+  const approvePayment = (p: any) =>
+    Alert.alert(
+      "Approve payment",
+      `Confirm you received ₦${Number(p.amountPaid || p.amount).toLocaleString()} from ${p.senderName} (${p.senderBank}) with reference ${p.reference}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Approve",
+          onPress: async () => {
+            try {
+              const svcRef = ref(database, `services/${p.serviceId}`);
+              const svc = (await get(svcRef)).val() || {};
+              const now = Date.now();
+              const expiresAt =
+                Math.max(now, svc.expiresAt || 0) + SUBSCRIPTION_DURATION_MS;
+              await update(svcRef, { active: true, isTrial: false, expiresAt });
+              await set(ref(database, `subscriptions/${p.userId}`), {
+                serviceId: p.serviceId,
+                status: "active",
+                paidAt: now,
+                expiresAt,
+                amount: p.amount,
+                reference: p.reference,
+              });
+              await update(ref(database, `paymentRequests/${p.serviceId}`), {
+                status: "approved",
+                approvedAt: now,
+              });
+            } catch (e: any) {
+              Alert.alert("Error", e.message || "Failed to approve payment.");
+            }
+          },
+        },
+      ],
+    );
+
+  const rejectPayment = (p: any) =>
+    Alert.alert("Reject payment", "Mark this payment as not received?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Reject",
+        style: "destructive",
+        onPress: () =>
+          update(ref(database, `paymentRequests/${p.serviceId}`), {
+            status: "rejected",
+            rejectedAt: Date.now(),
+          }),
       },
     ]);
 
@@ -1264,6 +1332,7 @@ function AdminPanel() {
   const pendingCount = pendingLocations.filter(
     (l) => l.status === "pending",
   ).length;
+  const pendingPayCount = payments.filter((p) => p.status === "pending").length;
 
   return (
     <View style={styles.root}>
@@ -1280,15 +1349,23 @@ function AdminPanel() {
 
       {/* Tabs */}
       <View style={styles.tabBar}>
-        {(["locations", "events", "users"] as AdminTab[]).map((tab) => {
+        {(["locations", "events", "payments", "users"] as AdminTab[]).map((tab) => {
           const TabIcon =
-            tab === "locations" ? MapPin : tab === "events" ? Calendar : Users;
+            tab === "locations"
+              ? MapPin
+              : tab === "events"
+                ? Calendar
+                : tab === "payments"
+                  ? CreditCard
+                  : Users;
           const tabLabel =
             tab === "locations"
               ? `Locations${pendingCount > 0 ? ` (${pendingCount})` : ""}`
               : tab === "events"
                 ? "Events"
-                : "Users";
+                : tab === "payments"
+                  ? `Payments${pendingPayCount > 0 ? ` (${pendingPayCount})` : ""}`
+                  : "Users";
           return (
             <TouchableOpacity
               key={tab}
@@ -1542,6 +1619,104 @@ function AdminPanel() {
                   </View>
                 );
               })
+            )}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* ── PAYMENTS TAB ── */}
+      {activeTab === "payments" && (
+        <View style={{ flex: 1 }}>
+          <View style={styles.tabToolbar}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterRowContent}
+            >
+              {(["pending", "approved", "rejected"] as const).map((f) => (
+                <TouchableOpacity
+                  key={f}
+                  style={[styles.chip, payFilter === f && styles.chipActive]}
+                  onPress={() => setPayFilter(f)}
+                >
+                  <Text
+                    style={[styles.chipText, payFilter === f && styles.chipTextActive]}
+                  >
+                    {f.charAt(0).toUpperCase() + f.slice(1)}
+                    {f === "pending" && pendingPayCount > 0 ? ` • ${pendingPayCount}` : ""}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+          <ScrollView contentContainerStyle={styles.listContent}>
+            {payments.filter((p) => p.status === payFilter).length === 0 ? (
+              <View style={styles.emptyState}>
+                <CreditCard size={40} color="#ccc" strokeWidth={1.8} />
+                <Text style={styles.emptyText}>No {payFilter} payments</Text>
+              </View>
+            ) : (
+              payments
+                .filter((p) => p.status === payFilter)
+                .map((p) => {
+                  const svc = servicesMap[p.serviceId] || {};
+                  return (
+                    <View key={p.id} style={styles.card}>
+                      <View style={styles.cardHeader}>
+                        <Text style={styles.cardTitle}>
+                          {svc.name || "Listing removed"}
+                        </Text>
+                        <View
+                          style={[
+                            styles.badge,
+                            p.status === "approved"
+                              ? styles.badgeGreen
+                              : p.status === "rejected"
+                                ? styles.badgeRed
+                                : styles.badgeOrange,
+                          ]}
+                        >
+                          <Text style={styles.badgeText}>{p.status}</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.cardDesc}>
+                        ₦{Number(p.amountPaid || p.amount).toLocaleString()} · Ref{" "}
+                        {p.reference}
+                      </Text>
+                      <Text style={styles.cardMeta}>
+                        From: {p.senderName} ({p.senderBank})
+                      </Text>
+                      {svc.providerName ? (
+                        <Text style={styles.cardMeta}>Provider: {svc.providerName}</Text>
+                      ) : null}
+                      {svc.phone ? (
+                        <Text style={styles.cardMeta}>Phone: {svc.phone}</Text>
+                      ) : null}
+                      {p.note ? <Text style={styles.cardMeta}>Note: {p.note}</Text> : null}
+                      <Text style={styles.cardMeta}>
+                        Submitted: {new Date(p.createdAt).toLocaleString("en-GB")}
+                      </Text>
+                      {p.status === "pending" && (
+                        <View style={styles.cardActions}>
+                          <TouchableOpacity
+                            style={[styles.actionBtn, styles.approveBtn]}
+                            onPress={() => approvePayment(p)}
+                          >
+                            <CheckCircle2 size={13} color="#fff" strokeWidth={2.4} />
+                            <Text style={styles.actionBtnText}>Approve</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.actionBtn, styles.rejectBtn]}
+                            onPress={() => rejectPayment(p)}
+                          >
+                            <XCircle size={13} color="#fff" strokeWidth={2.4} />
+                            <Text style={styles.actionBtnText}>Reject</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })
             )}
           </ScrollView>
         </View>
